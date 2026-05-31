@@ -1,0 +1,10 @@
+node_modules
+dist
+.DS_Store
+*.log
+.vite
+_qa_*.png
+_anim*.png
+_dev_*.png
+_v*.webp
+_v*.png

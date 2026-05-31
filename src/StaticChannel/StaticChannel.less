@@ -1,0 +1,112 @@
+.sc-root {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background:
+    radial-gradient(80% 50% at 50% 0%, rgba(60, 40, 20, 0.5), transparent 70%),
+    radial-gradient(60% 40% at 50% 100%, rgba(40, 20, 8, 0.6), transparent 70%),
+    #050403;
+  overflow: hidden;
+  position: relative;
+}
+
+.sc-header {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px 4px;
+
+  &__brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-family: 'Share Tech Mono', monospace;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+  }
+  &__logo {
+    color: #ff974a;
+    font-size: 16px;
+    text-shadow: 0 0 6px rgba(255, 150, 70, 0.6);
+  }
+  &__name {
+    font-size: 11px;
+    color: rgba(230, 215, 175, 0.7);
+  }
+  &__actions {
+    display: inline-flex;
+    gap: 8px;
+  }
+}
+
+.sc-iconbtn {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 220, 160, 0.2);
+  background: rgba(30, 22, 14, 0.55);
+  color: #f5e8c5;
+  font-size: 16px;
+  font-family: 'Share Tech Mono', monospace;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: manipulation;
+
+  &.is-off {
+    color: rgba(245, 232, 197, 0.5);
+    border-color: rgba(255, 220, 160, 0.1);
+  }
+}
+
+.sc-footer {
+  flex: 0 0 auto;
+  padding: 8px 16px 26px;
+  display: flex;
+  justify-content: center;
+}
+
+.sc-keep {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 28px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #ffb45a 0%, #ff8a32 100%);
+  color: #1a0e05;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 13px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  border: 1px solid rgba(0,0,0,0.3);
+  box-shadow: 0 8px 18px rgba(255, 120, 30, 0.25), inset 0 1px 0 rgba(255,255,255,0.3);
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: transform 100ms ease, opacity 120ms ease;
+
+  &:active:not(:disabled) {
+    transform: scale(0.97);
+  }
+  &:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    box-shadow: none;
+    background: rgba(255, 200, 130, 0.18);
+    color: rgba(255, 230, 190, 0.8);
+  }
+  &.is-kept {
+    background: rgba(255, 180, 90, 0.2);
+    color: #ffd58a;
+    border-color: rgba(255, 215, 140, 0.5);
+    box-shadow: none;
+    opacity: 1;
+  }
+  &__heart {
+    font-size: 16px;
+    color: #c8230b;
+    .sc-keep.is-kept & { color: #ffd58a; }
+  }
+}

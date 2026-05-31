@@ -1,0 +1,211 @@
+.sc-tv {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 16px 14px 4px;
+  flex: 1 1 auto;
+  min-height: 0;
+
+  &__cab {
+    width: 100%;
+    max-width: 460px;
+    background: linear-gradient(180deg, #2a2620 0%, #161311 70%, #0c0a08 100%);
+    border-radius: 22px;
+    padding: 16px 16px 10px;
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,240,0.06),
+      0 18px 40px rgba(0,0,0,0.55),
+      0 2px 0 rgba(0,0,0,0.35);
+    border: 1px solid #0a0907;
+    position: relative;
+    touch-action: none;
+  }
+
+  &__screen {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    background: #050402;
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow:
+      inset 0 0 30px rgba(0,0,0,0.85),
+      inset 0 0 1px rgba(160,200,255,0.25),
+      0 0 0 2px #0a0807;
+  }
+
+  &__pic {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    filter: saturate(0.85) contrast(1.05) brightness(0.95);
+    transition: opacity 380ms ease;
+  }
+
+  &__snow {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    mix-blend-mode: screen;
+    transition: opacity 220ms ease;
+  }
+
+  &__scanlines {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background-image: repeating-linear-gradient(
+      0deg,
+      rgba(0,0,0,0.22) 0px,
+      rgba(0,0,0,0.22) 1px,
+      transparent 1px,
+      transparent 3px
+    );
+    mix-blend-mode: multiply;
+    z-index: 4;
+  }
+
+  &__vignette {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: radial-gradient(120% 90% at 50% 50%, transparent 50%, rgba(0,0,0,0.85) 100%);
+    z-index: 5;
+  }
+
+  &__glare {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background:
+      radial-gradient(60% 30% at 30% 12%, rgba(255,255,255,0.10), transparent 70%),
+      radial-gradient(40% 30% at 78% 88%, rgba(120,255,200,0.05), transparent 70%);
+    z-index: 6;
+  }
+
+  &__chyron {
+    position: absolute;
+    left: 14px;
+    right: 14px;
+    z-index: 7;
+    pointer-events: none;
+    font-family: 'Share Tech Mono', 'VT323', ui-monospace, monospace;
+    text-transform: uppercase;
+    color: #cfead4;
+    text-shadow: 0 0 6px rgba(120,255,180,0.5);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+
+    &--top {
+      top: 10px;
+      justify-content: space-between;
+    }
+    &--bot {
+      bottom: 14px;
+      justify-content: flex-start;
+    }
+  }
+
+  &__freq {
+    font-size: 16px;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    em {
+      font-size: 10px;
+      font-style: normal;
+      opacity: 0.65;
+      margin-left: 2px;
+    }
+  }
+
+  &__call {
+    font-size: 12px;
+    padding: 2px 7px;
+    border: 1px solid rgba(180,255,200,0.4);
+    background: rgba(20, 35, 25, 0.55);
+    border-radius: 3px;
+    letter-spacing: 0.08em;
+  }
+
+  &__sub {
+    font-family: 'VT323', 'Share Tech Mono', monospace;
+    font-size: 19px;
+    line-height: 1.05;
+    color: #fff7d0;
+    text-shadow: 0 0 6px rgba(255,200,60,0.5), 0 1px 0 rgba(0,0,0,0.6);
+    background: linear-gradient(180deg, rgba(0,0,0,0.05), rgba(0,0,0,0.45));
+    padding: 4px 8px;
+    border-radius: 2px;
+    max-width: 92%;
+    word-break: break-word;
+  }
+
+  &__caption {
+    position: absolute;
+    left: 0; right: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    text-align: center;
+    z-index: 7;
+    pointer-events: none;
+    font-family: 'Share Tech Mono', monospace;
+    color: rgba(220, 240, 220, 0.9);
+    font-size: 14px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    text-shadow: 0 0 8px rgba(0,0,0,0.85), 0 0 14px rgba(120,255,180,0.25);
+  }
+
+  &__hint {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 8;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    pointer-events: none;
+    padding: 8px 14px;
+    background: rgba(0,0,0,0.55);
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 999px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: #f5efd2;
+    animation: sc-hint-pulse 1.6s ease-in-out infinite;
+  }
+
+  &__bezel-bottom {
+    margin-top: 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    color: rgba(230, 215, 175, 0.55);
+    text-transform: uppercase;
+  }
+
+  &__freq-mini {
+    font-family: 'VT323', 'Share Tech Mono', monospace;
+    font-size: 14px;
+    color: rgba(255,210,140,0.75);
+    letter-spacing: 0.06em;
+  }
+}
+
+@keyframes sc-hint-pulse {
+  0%,100% { opacity: 0.45; transform: translate(-50%, -50%) scale(1); }
+  50%     { opacity: 1.0;  transform: translate(-50%, -50%) scale(1.04); }
+}
