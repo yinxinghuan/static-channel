@@ -1,6 +1,8 @@
 // Same retry wrapper pattern as Ferrofluid + Frost Crystals: the platform
-// gen-image proxy enforces a per-IP cool-down (~20s effective). Auto-retry on
-// 429 with 25s backoff so concurrent users don't see a hard error.
+// gen-image proxy enforces a per-IP cool-down (~1s as of 2026-06-01).
+// Per-call latency is ~2.5s+, so sequential code rarely 429s; this exists for
+// concurrent users sharing the same IP. Auto-retry with 3s backoff (1s limit
+// + ~2s jitter buffer).
 
 import type { UseGenImage, GenImageOptions } from '@shared/runtime';
 
@@ -16,7 +18,7 @@ export async function genImageWithRetry(
   opts: GenImageOptions,
   onProgress?: (info: RetryProgress) => void,
   maxAttempts = 4,
-  backoffMs = 25_000,
+  backoffMs = 3_000,
 ): Promise<string> {
   let lastError: Error | undefined;
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
