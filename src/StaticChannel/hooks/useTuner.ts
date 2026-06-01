@@ -6,7 +6,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { initAudio, setHiss, playSweep } from '../utils/audio';
 import { FREQ_MAX, FREQ_MIN, clampFreq, snapFreq } from '../types';
 
-const PIXELS_PER_MHZ = 80;          // ~4.5 MHz per typical screen width
+const PIXELS_PER_MHZ_TV = 80;       // ~4.5 MHz per typical screen width on the TV
+const PIXELS_PER_MHZ_DIAL = 36;     // must match Dial's TAPE_PX_PER_MHZ for 1:1 finger ↔ tape tracking
 const MOMENTUM_DECAY = 0.92;
 const MOMENTUM_STOP = 0.005;        // MHz/frame below which we settle
 
@@ -25,7 +26,8 @@ export type TunerCallbacks = {
 export function useTuner(initial: number, cb: TunerCallbacks): {
   state: TunerState;
   handlers: {
-    onPointerDown: (e: React.PointerEvent) => void;
+    onPointerDown: (e: React.PointerEvent) => void;       // TV screen drag
+    onPointerDownDial: (e: React.PointerEvent) => void;   // bottom dial drag
   };
   jumpTo: (freq: number) => void;       // imperative (used by wall tap)
 } {
@@ -49,6 +51,7 @@ export function useTuner(initial: number, cb: TunerCallbacks): {
     lastX: number;
     lastT: number;
     velocity: number;                // MHz/ms
+    pxPerMHz: number;                // sensitivity of the drag source (TV vs Dial)
   } | null>(null);
 
   const settleRafRef = useRef<number | null>(null);
@@ -101,7 +104,7 @@ export function useTuner(initial: number, cb: TunerCallbacks): {
     settleRafRef.current = requestAnimationFrame(tick);
   }, [setFreq, stopSettle]);
 
-  const onPointerDown = useCallback((e: React.PointerEvent) => {
+  const beginDrag = useCallback((e: React.PointerEvent, pxPerMHz: number) => {
     if (e.button === 2) return;
     if (!firstTouchedRef.current) {
       firstTouchedRef.current = true;
@@ -119,10 +122,14 @@ export function useTuner(initial: number, cb: TunerCallbacks): {
       lastX: e.clientX,
       lastT: performance.now(),
       velocity: 0,
+      pxPerMHz,
     };
     setHiss(0.3);
     setState(s => ({ ...s, isDragging: true, isSettling: false }));
   }, [stopSettle]);
+
+  const onPointerDown     = useCallback((e: React.PointerEvent) => beginDrag(e, PIXELS_PER_MHZ_TV),   [beginDrag]);
+  const onPointerDownDial = useCallback((e: React.PointerEvent) => beginDrag(e, PIXELS_PER_MHZ_DIAL), [beginDrag]);
 
   useEffect(() => {
     const onMove = (e: PointerEvent) => {
@@ -134,7 +141,7 @@ export function useTuner(initial: number, cb: TunerCallbacks): {
       // Drag right → frequency DOWN (like dragging the dial card to the right
       // exposes lower frequencies on the left edge). Inverted to match the
       // tape-deck mental model.
-      const dMHz = -dx / PIXELS_PER_MHZ;
+      const dMHz = -dx / d.pxPerMHz;
       const next = stateRef.current.freq + dMHz;
       d.velocity = (d.velocity * 0.7) + ((dMHz / dt) * 0.3);   // smooth
       d.lastX = e.clientX;
@@ -181,7 +188,7 @@ export function useTuner(initial: number, cb: TunerCallbacks): {
 
   return {
     state,
-    handlers: { onPointerDown },
+    handlers: { onPointerDown, onPointerDownDial },
     jumpTo,
   };
 }

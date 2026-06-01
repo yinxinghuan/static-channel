@@ -177,7 +177,11 @@ export default function StaticChannel() {
         hintText={t('hint.drag')}
       />
 
-      <Dial freq={tuner.state.freq} />
+      <Dial
+        freq={tuner.state.freq}
+        isDragging={tuner.state.isDragging || tuner.state.isSettling}
+        onPointerDown={tuner.handlers.onPointerDownDial}
+      />
 
       <div className="sc-footer">
         <button

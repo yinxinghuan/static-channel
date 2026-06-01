@@ -1,6 +1,6 @@
 // Frequency tape under the TV — a horizontal strip of FM markings with a
-// fixed indicator at center. Visual only; the actual tuning input lives on
-// the TV screen.
+// fixed indicator at center. Draggable: drag the tape left/right to tune.
+// Sensitivity matches TAPE_PX_PER_MHZ so finger ↔ tape tracks 1:1.
 
 import './Dial.less';
 import { FREQ_MAX, FREQ_MIN } from '../types';
@@ -8,13 +8,27 @@ import { FREQ_MAX, FREQ_MIN } from '../types';
 const TAPE_PX_PER_MHZ = 36;
 const TAPE_TOTAL_PX = (FREQ_MAX - FREQ_MIN) * TAPE_PX_PER_MHZ;
 
-export default function Dial({ freq }: { freq: number }) {
+type DialProps = {
+  freq: number;
+  isDragging?: boolean;
+  onPointerDown?: (e: React.PointerEvent) => void;
+};
+
+export default function Dial({ freq, isDragging, onPointerDown }: DialProps) {
   const offset = -((freq - FREQ_MIN) * TAPE_PX_PER_MHZ);
   return (
     <div className="sc-dial">
-      <div className="sc-dial__viewport">
+      <div
+        className="sc-dial__viewport"
+        onPointerDown={onPointerDown}
+        role="slider"
+        aria-label="tuning dial"
+        aria-valuemin={FREQ_MIN}
+        aria-valuemax={FREQ_MAX}
+        aria-valuenow={freq}
+      >
         <div
-          className="sc-dial__tape"
+          className={`sc-dial__tape ${isDragging ? 'is-live' : ''}`}
           style={{ width: `${TAPE_TOTAL_PX}px`, transform: `translateX(calc(50% + ${offset}px))` }}
         >
           {Array.from({ length: Math.round((FREQ_MAX - FREQ_MIN) * 10) + 1 }, (_, i) => {
