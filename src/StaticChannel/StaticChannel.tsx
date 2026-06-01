@@ -19,6 +19,7 @@ import { useWall, unseenCount } from './hooks/useWall';
 import { useGameSave } from '@shared/save';
 import { telegramId } from '@shared/runtime';
 import { installGlobalTapFeedback, isMuted, setMuted } from './utils/audio';
+import { timeAgo } from './utils/timeAgo';
 import type { Bookmark, Channel, SavePayload, Segment } from './types';
 import { migrateSave, sameFreq, snapFreq } from './types';
 
@@ -95,17 +96,59 @@ export default function StaticChannel() {
     () => wall.broadcasts.find(b => sameFreq(b.freq, snapped)),
     [wall.broadcasts, snapped],
   );
+
+  // ─── Segment navigation (Feature 1: history timeline) ────────────────
+  // Default to the latest segment. Tracks "was on latest" so when a new
+  // segment arrives at the freq the user is currently viewing, we follow
+  // forward if they were on the previous latest, but stay put if they had
+  // deliberately tapped back to an older segment.
+  const [activeSegmentIdx, setActiveSegmentIdx] = useState(0);
+  const wasOnLatestRef = useRef(true);
+  const prevFreqRef = useRef(snapped);
+  const prevCountRef = useRef(0);
+  const segmentCount = activeBroadcast?.segmentCount ?? 0;
+
+  useEffect(() => {
+    if (prevFreqRef.current !== snapped) {
+      // Freq changed → default to latest.
+      prevFreqRef.current = snapped;
+      prevCountRef.current = segmentCount;
+      wasOnLatestRef.current = true;
+      setActiveSegmentIdx(Math.max(0, segmentCount - 1));
+      return;
+    }
+    if (prevCountRef.current !== segmentCount) {
+      // Same freq, count changed (someone — possibly us — added a segment).
+      if (wasOnLatestRef.current) {
+        setActiveSegmentIdx(Math.max(0, segmentCount - 1));
+      } else {
+        setActiveSegmentIdx((i) => Math.min(i, Math.max(0, segmentCount - 1)));
+      }
+      prevCountRef.current = segmentCount;
+    }
+  }, [snapped, segmentCount]);
+
+  const activeSegment = useMemo(
+    () => activeBroadcast?.segments[activeSegmentIdx],
+    [activeBroadcast, activeSegmentIdx],
+  );
+
   const activeChannel: Channel | null = useMemo(() => {
-    if (activeBroadcast) {
+    if (activeSegment) {
       return {
-        freq: activeBroadcast.freq,
-        channelName: activeBroadcast.channelName,
-        subtitle: activeBroadcast.latest.subtitle,
-        imageUrl: activeBroadcast.latest.imageUrl,
+        freq: activeSegment.freq,
+        channelName: activeSegment.channelName,
+        subtitle: activeSegment.subtitle,
+        imageUrl: activeSegment.imageUrl,
       };
     }
     return cache.get(snapped);
-  }, [activeBroadcast, cache, snapped]);
+  }, [activeSegment, cache, snapped]);
+
+  const handleSegmentTap = useCallback((idx: number) => {
+    setActiveSegmentIdx(idx);
+    wasOnLatestRef.current = (idx === segmentCount - 1);
+  }, [segmentCount]);
 
   // When the user lands on a bookmarked freq, advance the lastSeenTs so the
   // red dot clears.
@@ -182,10 +225,13 @@ export default function StaticChannel() {
 
   const handleStayOnAir = useCallback(async (nudge: string) => {
     if (!activeBroadcast) return;
+    // Extend from whichever segment the user is currently watching — feels
+    // natural to "continue from here" rather than always from the freq's latest.
+    const priorSubtitle = activeSegment?.subtitle ?? activeBroadcast.latest.subtitle;
     const seg = await channelGen.extendChannel({
       freq: activeBroadcast.freq,
       channelName: activeBroadcast.channelName,
-      priorSubtitle: activeBroadcast.latest.subtitle,
+      priorSubtitle,
       nudge,
     });
     if (!seg) return;
@@ -197,9 +243,11 @@ export default function StaticChannel() {
     ].slice(0, BOOKMARK_CAP);
     // Surface our new segment immediately on the TV via the cache.
     cache.set({ freq: seg.freq, channelName: seg.channelName, subtitle: seg.subtitle, imageUrl: seg.imageUrl });
+    // After publishing, jump to the new latest so the user sees what they made.
+    wasOnLatestRef.current = true;
     persist(nextSegs, nextBookmarks);
     wall.refresh();
-  }, [activeBroadcast, bookmarks, cache, channelGen, persist, segments, wall]);
+  }, [activeBroadcast, activeSegment, bookmarks, cache, channelGen, persist, segments, wall]);
 
   // ─── Wall jump ────────────────────────────────────────────────────────
   const handleJump = useCallback((freq: number) => {
@@ -212,6 +260,10 @@ export default function StaticChannel() {
         imageUrl: wallHit.latest.imageUrl,
       });
     }
+    // Arriving at a freq from the wall — always land on the latest segment.
+    // (The freq-change effect will run on tuner.jumpTo + reset idx, but we
+    // explicitly mark wasOnLatest so the user follows new segments forward.)
+    wasOnLatestRef.current = true;
     tuner.jumpTo(freq);
     setWallOpen(false);
   }, [cache, tuner, wall.broadcasts]);
@@ -234,11 +286,17 @@ export default function StaticChannel() {
   }, [wall.recent]);
   const unseen = useMemo(() => unseenCount(wall.broadcasts, bookmarks), [wall.broadcasts, bookmarks]);
 
-  // Segment indicator data for TV.
-  const segmentCountForTV = activeBroadcast?.segmentCount;
-  const latestAuthorNameForTV = activeBroadcast && activeBroadcast.latest.authorId !== telegramId
-    ? activeBroadcast.latest.authorName
-    : undefined;
+  // Segment nav (Feature 1: history timeline).
+  const segNav = useMemo(() => {
+    if (!activeBroadcast || activeBroadcast.segmentCount < 2 || !activeSegment) return undefined;
+    return {
+      count: activeBroadcast.segmentCount,
+      activeIdx: activeSegmentIdx,
+      activeAuthor: activeSegment.authorId === telegramId ? t('wall.you') : activeSegment.authorName,
+      activeAgoLabel: timeAgo(activeSegment.ts),
+      onTapDot: handleSegmentTap,
+    };
+  }, [activeBroadcast, activeSegment, activeSegmentIdx, handleSegmentTap]);
 
   return (
     <div className="sc-root">
@@ -273,8 +331,7 @@ export default function StaticChannel() {
         onPointerDown={tuner.handlers.onPointerDown}
         showHint={hintVisible && !activeChannel}
         hintText={t('hint.drag')}
-        segmentCount={segmentCountForTV}
-        latestAuthorName={latestAuthorNameForTV}
+        segNav={segNav}
       />
 
       <Dial

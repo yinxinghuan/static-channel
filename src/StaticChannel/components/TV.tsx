@@ -3,11 +3,23 @@
 //   2. channel <img> (only when locked)
 //   3. scanlines + vignette + glass curve (CSS pseudo-elements)
 //   4. chyron overlays — frequency + station name + subtitle
+//   5. segment rail (bottom, when broadcast has ≥ 2 segments)
 //
-// The whole TV is the drag surface — pointerdown is captured here.
+// The whole TV is the drag surface — pointerdown is captured here. The dot
+// rail's individual dots stopPropagation so tapping a dot doesn't also start
+// a frequency drag.
 
 import { useEffect, useRef } from 'react';
 import './TV.less';
+import { t } from '../i18n';
+
+export type TVSegmentNav = {
+  count: number;
+  activeIdx: number;            // 0..count-1
+  activeAuthor?: string;
+  activeAgoLabel?: string;      // e.g. "12m" / "2h" / "now"
+  onTapDot: (idx: number) => void;
+};
 
 export type TVProps = {
   freq: number;                   // 88.0..108.0 (raw, for display ticker)
@@ -20,14 +32,13 @@ export type TVProps = {
   onPointerDown: (e: React.PointerEvent) => void;
   showHint: boolean;
   hintText: string;
-  // Segment indicator — only shown when the active broadcast has ≥ 2 segments.
-  segmentCount?: number;
-  latestAuthorName?: string;
+  // Multi-segment broadcast UI — only rendered when nav.count ≥ 2.
+  segNav?: TVSegmentNav;
 };
 
 export default function TV({
   freq, snappedFreq, snowLevel, channelName, subtitle, imageUrl, caption,
-  onPointerDown, showHint, hintText, segmentCount, latestAuthorName,
+  onPointerDown, showHint, hintText, segNav,
 }: TVProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -62,6 +73,8 @@ export default function TV({
   const displayFreq = freq.toFixed(1);
   const snowAlpha = Math.max(0.04, Math.min(1, snowLevel));
 
+  const showSegUI = !!segNav && segNav.count >= 2 && snowLevel < 0.4;
+
   return (
     <div className="sc-tv">
       <div className="sc-tv__cab" onPointerDown={onPointerDown}>
@@ -95,16 +108,33 @@ export default function TV({
             </div>
           )}
 
-          {snowLevel < 0.4 && segmentCount != null && segmentCount >= 2 && (
-            <div className="sc-tv__segments" aria-label="segment count">
-              <span className="sc-tv__segments-dots" aria-hidden="true">
-                {Array.from({ length: Math.min(5, segmentCount) }, (_, i) => (
-                  <span key={i} className={`sc-tv__segments-dot ${i === Math.min(5, segmentCount) - 1 ? 'is-on' : ''}`} />
-                ))}
-              </span>
+          {showSegUI && segNav && (
+            <div className="sc-tv__segments" aria-label="segment position">
               <span className="sc-tv__segments-label">
-                {segmentCount}{latestAuthorName ? ` · ${latestAuthorName}` : ''}
+                {t('seg.pos', { i: segNav.activeIdx + 1, n: segNav.count })}
+                {segNav.activeAuthor ? ` · ${segNav.activeAuthor}` : ''}
+                {segNav.activeAgoLabel ? ` · ${segNav.activeAgoLabel}` : ''}
               </span>
+            </div>
+          )}
+
+          {showSegUI && segNav && (
+            <div
+              className="sc-tv__segrail"
+              onPointerDown={(e) => e.stopPropagation()}
+            >
+              {Array.from({ length: segNav.count }, (_, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  className={`sc-tv__segdot ${i === segNav.activeIdx ? 'is-on' : ''}`}
+                  aria-label={t('seg.jump_to', { i: i + 1, n: segNav.count })}
+                  onPointerDown={(e) => {
+                    e.stopPropagation();
+                    segNav.onTapDot(i);
+                  }}
+                />
+              ))}
             </div>
           )}
 

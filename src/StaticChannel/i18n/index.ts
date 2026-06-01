@@ -30,6 +30,15 @@ const STR: Record<Locale, Record<string, string>> = {
     'ticker.added': 'added to {f}',
     'ticker.new_pill': '{n} new',
     'ticker.open_wall': 'open wall',
+    'ago.now': 'now',
+    'ago.sec': '{n}s',
+    'ago.min': '{n}m',
+    'ago.hr':  '{n}h',
+    'ago.day': '{n}d',
+    'ago.wk':  '{n}w',
+    'ago.mo':  '{n}mo',
+    'seg.pos': '{i}/{n}',
+    'seg.jump_to': 'segment {i} of {n}',
     'stay.placeholder': 'what plays next?',
     'stay.send': 'STAY ON AIR',
     'stay.sending': 'on air…',
@@ -68,6 +77,15 @@ const STR: Record<Locale, Record<string, string>> = {
     'ticker.added': '续到了 {f}',
     'ticker.new_pill': '{n} 条新',
     'ticker.open_wall': '打开收藏',
+    'ago.now': '刚刚',
+    'ago.sec': '{n}秒前',
+    'ago.min': '{n}分前',
+    'ago.hr':  '{n}时前',
+    'ago.day': '{n}天前',
+    'ago.wk':  '{n}周前',
+    'ago.mo':  '{n}月前',
+    'seg.pos': '{i}/{n}',
+    'seg.jump_to': '第 {i} 段, 共 {n} 段',
     'stay.placeholder': '接下来播什么？',
     'stay.send': '接着播',
     'stay.sending': '直播中…',
@@ -89,12 +107,16 @@ function detectLocale(): Locale {
 
 let LOCALE: Locale = detectLocale();
 
-export function t(key: string, vars?: { n?: number | string; f?: number | string; who?: string }): string {
+export function t(
+  key: string,
+  vars?: { n?: number | string; f?: number | string; who?: string; i?: number | string },
+): string {
   let s = STR[LOCALE][key];
   if (!s) return key;
-  if (vars?.n != null) s = s.replace('{n}', String(vars.n));
-  if (vars?.f != null) s = s.replace('{f}', String(vars.f));
+  if (vars?.n   != null) s = s.replace('{n}',   String(vars.n));
+  if (vars?.f   != null) s = s.replace('{f}',   String(vars.f));
   if (vars?.who != null) s = s.replace('{who}', String(vars.who));
+  if (vars?.i   != null) s = s.replace('{i}',   String(vars.i));
   return s;
 }
 export function locale(): Locale { return LOCALE; }

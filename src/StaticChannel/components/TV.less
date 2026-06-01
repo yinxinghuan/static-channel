@@ -163,15 +163,14 @@
     text-shadow: 0 0 8px rgba(0,0,0,0.85), 0 0 14px rgba(120,255,180,0.25);
   }
 
+  // Top-right pill: "i/N · author · ago" (text only — the dot rail at the
+  // bottom shows position visually).
   &__segments {
     position: absolute;
     top: 8px;
     right: 10px;
     z-index: 8;
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 3px 7px;
+    padding: 3px 8px;
     border-radius: 999px;
     background: rgba(0, 0, 0, 0.55);
     border: 1px solid rgba(255, 220, 160, 0.35);
@@ -183,30 +182,57 @@
     text-shadow: 0 1px 0 rgba(0,0,0,0.6);
   }
 
-  &__segments-dots {
-    display: inline-flex;
-    align-items: center;
-    gap: 2px;
-  }
-
-  &__segments-dot {
-    width: 4px;
-    height: 4px;
-    border-radius: 50%;
-    background: rgba(255, 220, 160, 0.35);
-
-    &.is-on {
-      background: #ff8a3a;
-      box-shadow: 0 0 4px rgba(255, 138, 58, 0.7);
-    }
-  }
-
   &__segments-label {
     font-weight: 700;
-    max-width: 90px;
+    max-width: 160px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  // Bottom dot rail — each dot is tappable, jumps the TV to that segment.
+  &__segrail {
+    position: absolute;
+    left: 50%;
+    bottom: 5px;
+    transform: translateX(-50%);
+    z-index: 8;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 4px 6px;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(2px);
+  }
+
+  &__segdot {
+    appearance: none;
+    border: 0;
+    padding: 4px;             // tap target padding around 6px visible dot
+    background: transparent;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+
+    // The visible dot is a pseudo so the tap target stays bigger.
+    &::before {
+      content: '';
+      display: block;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: rgba(255, 220, 160, 0.35);
+      transition: background 120ms ease, transform 120ms ease, box-shadow 120ms ease;
+    }
+    &.is-on::before {
+      background: #ff8a3a;
+      box-shadow: 0 0 6px rgba(255, 138, 58, 0.8);
+      transform: scale(1.25);
+    }
+    &:active::before {
+      transform: scale(0.85);
+    }
   }
 
   &__hint {

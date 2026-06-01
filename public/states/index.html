@@ -1,0 +1,1177 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>UI States — Static Channel</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=VT323&display=swap" rel="stylesheet">
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #050403;
+    --panel: #15131a;
+    --ink: #f4ecdf;
+    --dim: #8a807a;
+    --amber: #ff8a3a;
+    --amber-soft: #ffd9a0;
+    --red: #c5341e;
+    --gold: #c9a14a;
+    --border: #2a2522;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: ui-serif, Georgia, serif;
+    background: var(--bg);
+    color: var(--ink);
+    min-height: 100vh;
+    padding: 32px 18px 60px;
+    line-height: 1.55;
+  }
+  .wrap { max-width: 1380px; margin: 0 auto; }
+
+  header { border-bottom: 1px solid var(--border); padding-bottom: 16px; margin-bottom: 28px; }
+  h1 { font-size: 26px; letter-spacing: 0.02em; font-weight: 600; }
+  h1 small {
+    display: block; font-size: 13px; color: var(--dim);
+    margin-top: 4px; font-style: italic; letter-spacing: 0.04em;
+  }
+  .sub { margin-top: 10px; color: var(--dim); font-size: 14px; }
+  .sub b { color: var(--amber-soft); }
+  .legend {
+    margin-top: 14px; padding: 12px 16px;
+    background: rgba(255, 138, 58, 0.06);
+    border-left: 3px solid var(--amber);
+    font-size: 13px; color: var(--dim); line-height: 1.7;
+  }
+  .legend b { color: var(--ink); }
+  .legend code {
+    font-family: ui-monospace, "SF Mono", monospace;
+    font-size: 11px; color: var(--amber-soft);
+    background: rgba(0,0,0,0.4); padding: 1px 5px; border-radius: 2px;
+  }
+
+  main {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+    gap: 28px;
+    margin-top: 28px;
+  }
+
+  .card {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 6px; overflow: hidden;
+    display: flex; flex-direction: column;
+  }
+  .card__head { padding: 14px 16px 8px; }
+  .card__phase {
+    font-size: 10px; color: var(--amber); letter-spacing: 0.22em;
+    text-transform: uppercase; font-family: ui-monospace, "SF Mono", monospace;
+  }
+  .card__title { font-size: 16px; font-weight: 600; margin-top: 4px; }
+  .card__note {
+    padding: 12px 16px 16px; font-size: 12px; color: var(--dim);
+    line-height: 1.65; flex: 1;
+  }
+  .card__note b { color: var(--ink); }
+  .card__note em { color: var(--amber-soft); font-style: normal; }
+
+  .stage-wrap {
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    background: #000;
+    padding: 12px;
+    display: flex; align-items: stretch; justify-content: center;
+  }
+
+  /* ─── Mini Static Channel app ────────────────────────────────────────── */
+  /* Mirrors src/StaticChannel/*.tsx + *.less but scaled for 340px wide. */
+  .sc {
+    width: 320px;
+    background:
+      radial-gradient(80% 50% at 50% 0%, rgba(60, 40, 20, 0.5), transparent 70%),
+      radial-gradient(60% 40% at 50% 100%, rgba(40, 20, 8, 0.6), transparent 70%),
+      #050403;
+    overflow: hidden;
+    position: relative;
+    border-radius: 8px;
+    color: var(--ink);
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Header */
+  .sc-hdr {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 12px 4px;
+  }
+  .sc-hdr__brand {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-family: 'Share Tech Mono', monospace;
+    text-transform: uppercase; letter-spacing: 0.18em;
+  }
+  .sc-hdr__logo { color: var(--amber); font-size: 13px; text-shadow: 0 0 6px rgba(255,150,70,0.6); }
+  .sc-hdr__name { font-size: 9px; color: rgba(230, 215, 175, 0.7); }
+  .sc-iconbtn {
+    width: 26px; height: 26px; border-radius: 50%;
+    border: 1px solid rgba(255, 220, 160, 0.2);
+    background: rgba(30, 22, 14, 0.55);
+    color: #f5e8c5; font-size: 12px;
+    font-family: 'Share Tech Mono', monospace;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+
+  /* Top ticker */
+  .sc-ticker-wrap { padding: 4px 10px 0; }
+  .sc-ticker {
+    display: flex; align-items: center; gap: 7px; width: 100%;
+    padding: 6px 9px;
+    background: linear-gradient(180deg, #1a1611 0%, #110d09 100%);
+    border: 1px solid #2a1f14; border-radius: 6px;
+    color: #d8c89a;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 10px; letter-spacing: 0.04em;
+    text-align: left;
+  }
+  .sc-ticker__dot {
+    color: var(--amber); font-size: 11px;
+    text-shadow: 0 0 6px rgba(255, 138, 58, 0.55);
+    animation: sc-pulse 2.4s ease-in-out infinite;
+  }
+  .sc-ticker__body {
+    flex: 1; min-width: 0;
+    display: flex; align-items: center; gap: 5px;
+    overflow: hidden; white-space: nowrap;
+  }
+  .sc-ticker__avatar {
+    width: 13px; height: 13px; border-radius: 50%;
+    background: #4a3a26; color: var(--amber-soft);
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 8px; font-weight: 700; line-height: 1;
+  }
+  .sc-ticker__name {
+    color: var(--amber-soft); font-weight: 600; max-width: 70px;
+    overflow: hidden; text-overflow: ellipsis;
+  }
+  .sc-ticker__sep { color: rgba(216, 200, 154, 0.4); }
+  .sc-ticker__verb { color: rgba(255, 220, 160, 0.7); }
+  .sc-ticker__sub {
+    flex: 1; min-width: 0;
+    color: rgba(216, 200, 154, 0.75);
+    overflow: hidden; text-overflow: ellipsis; font-style: italic;
+  }
+  .sc-ticker__sub--empty { color: rgba(216, 200, 154, 0.45); }
+  .sc-ticker__pill {
+    padding: 2px 6px; border-radius: 999px;
+    background: var(--red); color: #fff8e8;
+    font-size: 8px; font-weight: 700; letter-spacing: 0.06em;
+    box-shadow: 0 0 5px rgba(197, 52, 30, 0.65);
+    animation: sc-pillpulse 1.6s ease-in-out infinite;
+  }
+
+  /* TV */
+  .sc-tv { padding: 10px 10px 4px; }
+  .sc-tv__cab {
+    width: 100%;
+    background: linear-gradient(180deg, #2a2620 0%, #161311 70%, #0c0a08 100%);
+    border-radius: 14px; padding: 9px 9px 6px;
+    box-shadow: inset 0 1px 0 rgba(255,255,240,0.06),
+                0 12px 24px rgba(0,0,0,0.55),
+                0 2px 0 rgba(0,0,0,0.35);
+    border: 1px solid #0a0907;
+    position: relative;
+  }
+  .sc-tv__screen {
+    position: relative; width: 100%; aspect-ratio: 4/3;
+    background: #050402; border-radius: 9px; overflow: hidden;
+  }
+  .sc-tv__pic {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    object-fit: cover;
+    filter: saturate(0.85) contrast(1.05);
+  }
+  .sc-tv__snow {
+    position: absolute; inset: 0;
+    background-image:
+      radial-gradient(rgba(255,255,255,0.7) 0.5px, transparent 1px),
+      radial-gradient(rgba(255,255,255,0.4) 0.5px, transparent 1px);
+    background-size: 3px 3px, 5px 5px;
+    background-position: 0 0, 2px 2px;
+    mix-blend-mode: screen;
+    opacity: 0.06;
+    animation: sc-snow 0.12s steps(4) infinite;
+  }
+  .sc-tv__snow--heavy { opacity: 0.95; }
+  .sc-tv__snow--mid { opacity: 0.55; }
+  .sc-tv__scanlines {
+    position: absolute; inset: 0;
+    background: repeating-linear-gradient(0deg,
+      rgba(0,0,0,0.0) 0px, rgba(0,0,0,0.18) 1px, rgba(0,0,0,0.0) 2px, transparent 3px);
+    mix-blend-mode: multiply;
+  }
+  .sc-tv__vignette {
+    position: absolute; inset: 0;
+    background: radial-gradient(120% 95% at 50% 50%, transparent 60%, rgba(0,0,0,0.8) 100%);
+    pointer-events: none;
+  }
+  .sc-tv__chyron {
+    position: absolute; left: 0; right: 0; padding: 0 8px;
+    display: flex; align-items: center; gap: 6px;
+    z-index: 7;
+  }
+  .sc-tv__chyron--top { top: 6px; justify-content: space-between; }
+  .sc-tv__chyron--bot { bottom: 8px; justify-content: center; }
+  .sc-tv__freq {
+    font-family: 'VT323', monospace;
+    font-size: 14px;
+    color: #fff4c8;
+    text-shadow: 0 0 5px rgba(255,180,60,0.6);
+  }
+  .sc-tv__freq em { font-style: normal; font-size: 9px; opacity: 0.7; }
+  .sc-tv__call {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 9px; letter-spacing: 0.1em;
+    color: #d4f0d8;
+    padding: 1px 5px;
+    background: rgba(60, 90, 60, 0.55);
+    border: 1px solid rgba(180, 255, 200, 0.4);
+    border-radius: 2px;
+    text-transform: uppercase;
+  }
+  .sc-tv__sub {
+    font-family: 'VT323', monospace;
+    font-size: 14px; line-height: 1.05;
+    color: #fff7d0;
+    text-shadow: 0 0 6px rgba(255,200,60,0.5), 0 1px 0 rgba(0,0,0,0.6);
+    background: linear-gradient(180deg, rgba(0,0,0,0.05), rgba(0,0,0,0.45));
+    padding: 2px 6px; border-radius: 2px;
+    max-width: 92%; text-align: center;
+    word-break: break-word;
+  }
+  .sc-tv__caption {
+    position: absolute; left: 0; right: 0;
+    top: 50%; transform: translateY(-50%);
+    text-align: center; z-index: 7;
+    font-family: 'Share Tech Mono', monospace;
+    color: rgba(220, 240, 220, 0.9);
+    font-size: 11px; letter-spacing: 0.12em;
+    text-transform: uppercase;
+    text-shadow: 0 0 6px rgba(0,0,0,0.85), 0 0 10px rgba(120,255,180,0.25);
+  }
+  .sc-tv__hint {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+    z-index: 8;
+    font-family: 'Share Tech Mono', monospace;
+    color: var(--amber-soft);
+    font-size: 10px; letter-spacing: 0.06em;
+    text-shadow: 0 0 6px rgba(0,0,0,0.85);
+    animation: sc-pulse 2.4s ease-in-out infinite;
+  }
+  .sc-tv__segments {
+    position: absolute; top: 6px; right: 8px;
+    z-index: 8;
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 2px 6px; border-radius: 999px;
+    background: rgba(0,0,0,0.55);
+    border: 1px solid rgba(255,220,160,0.35);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 8px; color: var(--amber-soft);
+    letter-spacing: 0.06em;
+  }
+  .sc-tv__segments-dots { display: inline-flex; gap: 2px; }
+  .sc-tv__segments-dot {
+    width: 3px; height: 3px; border-radius: 50%;
+    background: rgba(255,220,160,0.35);
+  }
+  .sc-tv__segments-dot.is-on {
+    background: var(--amber);
+    box-shadow: 0 0 3px rgba(255,138,58,0.7);
+  }
+  .sc-tv__segments-label { font-weight: 700; }
+  .sc-tv__bezel-bottom {
+    margin-top: 6px;
+    display: flex; align-items: center; justify-content: space-between;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 7px; letter-spacing: 0.18em;
+    color: rgba(230, 215, 175, 0.55);
+    text-transform: uppercase;
+  }
+
+  /* Dial */
+  .sc-dial { width: 100%; padding: 6px 10px 3px; display: flex; justify-content: center; }
+  .sc-dial__viewport {
+    position: relative; width: 100%; height: 38px;
+    background: linear-gradient(180deg, #211b13 0%, #110d09 100%);
+    border: 1px solid #0a0807; border-radius: 7px;
+    box-shadow: inset 0 2px 4px rgba(0,0,0,0.7);
+    overflow: hidden;
+  }
+  .sc-dial__tape {
+    position: absolute; top: 0; left: 50%;
+    height: 100%;
+    display: flex; align-items: flex-end;
+    transform: translateX(-50%);
+  }
+  .sc-dial__tick {
+    width: 1px; height: 10px; margin: 0 5px;
+    background: rgba(220, 200, 150, 0.35);
+    position: relative;
+  }
+  .sc-dial__tick--major {
+    width: 2px; height: 18px;
+    background: rgba(255, 230, 180, 0.85);
+  }
+  .sc-dial__tick--half {
+    height: 13px; background: rgba(255, 220, 160, 0.5);
+  }
+  .sc-dial__num {
+    position: absolute; bottom: -14px; left: 50%; transform: translateX(-50%);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 9px; color: rgba(255, 220, 160, 0.85);
+  }
+  .sc-dial__pointer {
+    position: absolute; top: 0; bottom: 0; left: 50%;
+    width: 2px; transform: translateX(-50%);
+    background: linear-gradient(180deg, #ffb04a 0%, #ff7e2c 60%, #b54a18 100%);
+    box-shadow: 0 0 6px rgba(255, 170, 70, 0.55);
+    z-index: 3;
+  }
+  .sc-dial__shroud {
+    position: absolute; top: 0; bottom: 0; width: 30px; z-index: 2; pointer-events: none;
+  }
+  .sc-dial__shroud--left  { left: 0;  background: linear-gradient(90deg, #110d09 0%, transparent 100%); }
+  .sc-dial__shroud--right { right: 0; background: linear-gradient(270deg, #110d09 0%, transparent 100%); }
+
+  /* Stay On Air */
+  .sc-stay {
+    display: flex; align-items: stretch; gap: 6px;
+    padding: 6px 10px 3px;
+  }
+  .sc-stay__input {
+    flex: 1; min-width: 0;
+    padding: 6px 8px;
+    background: #14110d; color: #f5e6c4;
+    border: 1px solid #2a1f14; border-radius: 6px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 10px;
+  }
+  .sc-stay__input::placeholder { color: rgba(216, 200, 154, 0.45); font-style: italic; }
+  .sc-stay__input--focused { border-color: var(--amber); box-shadow: 0 0 0 1px rgba(255,138,58,0.4); }
+  .sc-stay__input--filled { color: var(--ink); }
+  .sc-stay.is-disabled .sc-stay__send { opacity: 0.4; }
+  .sc-stay__send {
+    padding: 0 9px;
+    background: linear-gradient(180deg, #ffb04a 0%, #ff7e2c 100%);
+    color: #1a0e05;
+    border: 1px solid #b54a18; border-radius: 6px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 8px; font-weight: 700; letter-spacing: 0.08em;
+    text-shadow: 0 1px 0 rgba(255, 230, 180, 0.4);
+  }
+  .sc-stay.is-busy .sc-stay__send { opacity: 0.75; }
+
+  /* KEEP */
+  .sc-footer { padding: 4px 12px 14px; display: flex; justify-content: center; }
+  .sc-keep {
+    display: inline-flex; align-items: center; gap: 7px;
+    padding: 8px 20px; border-radius: 999px;
+    background: linear-gradient(180deg, #ffb45a 0%, #ff8a32 100%);
+    color: #1a0e05;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase;
+    border: 1px solid rgba(0,0,0,0.3);
+    box-shadow: 0 6px 14px rgba(255, 120, 30, 0.25),
+                inset 0 1px 0 rgba(255,255,255,0.3);
+  }
+  .sc-keep__heart { font-size: 12px; color: #c8230b; }
+  .sc-keep.is-disabled {
+    opacity: 0.4; box-shadow: none;
+    background: rgba(255, 200, 130, 0.18);
+    color: rgba(255, 230, 190, 0.8);
+  }
+  .sc-keep.is-kept {
+    background: rgba(255, 180, 90, 0.2);
+    color: var(--amber-soft);
+    border-color: rgba(255, 215, 140, 0.5);
+    box-shadow: none;
+  }
+  .sc-keep.is-kept .sc-keep__heart { color: var(--amber-soft); }
+
+  /* Wall overlay */
+  .sc-wall {
+    position: absolute; inset: 0;
+    background: linear-gradient(180deg, #0c0a08 0%, #050403 100%);
+    z-index: 30;
+    display: flex; flex-direction: column;
+  }
+  .sc-wall__bar {
+    display: flex; gap: 6px; padding: 10px 10px 8px;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+  }
+  .sc-wall__tab {
+    background: transparent;
+    color: rgba(220, 210, 170, 0.55);
+    border: 1px solid rgba(255, 220, 160, 0.18);
+    border-radius: 999px;
+    padding: 5px 11px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 9px; letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+  .sc-wall__tab.is-active {
+    background: rgba(255, 215, 140, 0.9);
+    color: #1a120a;
+    border-color: rgba(255, 215, 140, 0.9);
+  }
+  .sc-wall__close {
+    margin-left: auto; width: 26px; height: 26px; border-radius: 50%;
+    border: 1px solid rgba(255,255,255,0.15);
+    background: rgba(255,255,255,0.04);
+    color: #f3eccf; font-size: 16px; line-height: 1;
+  }
+  .sc-wall__scroll { padding: 6px 10px 10px; }
+  .sc-wall__card {
+    position: relative; width: 100%;
+    display: grid; grid-template-columns: 70px 1fr; gap: 10px;
+    align-items: stretch; padding: 8px;
+    margin: 6px 0;
+    background: rgba(28, 22, 16, 0.7);
+    border: 1px solid rgba(255, 220, 160, 0.12);
+    border-radius: 8px;
+    text-align: left;
+  }
+  .sc-wall__card.has-new {
+    border-color: rgba(255, 138, 58, 0.7);
+    box-shadow: 0 0 0 1px rgba(255, 138, 58, 0.35), 0 0 10px rgba(255, 138, 58, 0.25);
+  }
+  .sc-wall__pic-wrap {
+    position: relative; width: 70px; aspect-ratio: 4/3;
+    overflow: hidden; border-radius: 5px; background: #050402;
+  }
+  .sc-wall__pic-scan {
+    position: absolute; inset: 0;
+    background-image: repeating-linear-gradient(0deg, rgba(0,0,0,0.3) 0px, rgba(0,0,0,0.3) 1px, transparent 1px, transparent 3px);
+    mix-blend-mode: multiply;
+  }
+  .sc-wall__pic-vign {
+    position: absolute; inset: 0;
+    background: radial-gradient(120% 90% at 50% 50%, transparent 50%, rgba(0,0,0,0.7) 100%);
+  }
+  .sc-wall__freq {
+    position: absolute; left: 3px; bottom: 3px;
+    font-family: 'VT323', monospace;
+    font-size: 11px;
+    color: #fff4c8;
+    background: rgba(0,0,0,0.6);
+    padding: 0 3px; border-radius: 2px;
+  }
+  .sc-wall__segpill {
+    position: absolute; right: 3px; top: 3px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 8px; color: var(--amber-soft);
+    background: rgba(0, 0, 0, 0.65);
+    border: 1px solid rgba(255, 220, 160, 0.4);
+    padding: 1px 4px; border-radius: 999px;
+  }
+  .sc-wall__newdot {
+    position: absolute; top: 6px; right: 6px;
+    width: 7px; height: 7px; border-radius: 50%;
+    background: #ff5a3a;
+    box-shadow: 0 0 5px rgba(255, 90, 58, 0.8);
+    animation: sc-pillpulse 1.5s ease-in-out infinite;
+  }
+  .sc-wall__meta {
+    min-width: 0; display: flex; flex-direction: column; gap: 3px;
+    justify-content: center;
+  }
+  .sc-wall__top { display: flex; align-items: center; gap: 6px; min-width: 0; }
+  .sc-wall__call {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 9px; letter-spacing: 0.1em; color: #d4f0d8;
+    padding: 1px 4px;
+    background: rgba(60, 90, 60, 0.35);
+    border: 1px solid rgba(180, 255, 200, 0.25);
+    border-radius: 2px;
+    text-transform: uppercase;
+  }
+  .sc-wall__author {
+    display: inline-flex; align-items: center; gap: 4px;
+    color: rgba(230, 215, 170, 0.75);
+    font-size: 9px; font-family: ui-sans-serif, system-ui, sans-serif;
+    overflow: hidden;
+  }
+  .sc-wall__author--you {
+    color: var(--amber-soft);
+    font-family: 'Share Tech Mono', monospace;
+    letter-spacing: 0.14em; font-size: 8px;
+  }
+  .sc-wall__avatar {
+    width: 14px; height: 14px; border-radius: 50%;
+    background: #4a3a26; color: #f5e8c8;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 8px;
+  }
+  .sc-wall__sub {
+    font-family: 'VT323', monospace; color: #fff7d0;
+    font-size: 13px; line-height: 1.05;
+    overflow: hidden;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  }
+
+  /* Channel image placeholders (SVG-style backgrounds) */
+  .scene { width: 100%; height: 100%; }
+  .scene--kitchen {
+    background:
+      linear-gradient(180deg, rgba(180,180,140,0.35) 0%, rgba(120,150,160,0.45) 60%, rgba(40,60,80,0.65) 100%),
+      repeating-linear-gradient(90deg, transparent 0 12px, rgba(0,0,0,0.08) 12px 13px),
+      linear-gradient(180deg, #c8b87a 0%, #6a7878 100%);
+  }
+  .scene--wedding {
+    background:
+      radial-gradient(ellipse at 50% 70%, rgba(255,180,80,0.5) 0%, transparent 70%),
+      linear-gradient(180deg, #4a2a14 0%, #7a4a26 60%, #2a1408 100%);
+  }
+  .scene--testpattern {
+    background: linear-gradient(90deg, #ff6464 0%, #ffb464 14%, #ffe864 28%, #64c864 42%, #64c8c8 56%, #6464c8 70%, #c864c8 84%, #444 100%);
+  }
+  .scene--pearl {
+    background:
+      radial-gradient(circle at 30% 40%, rgba(255,200,160,0.4) 0%, transparent 50%),
+      linear-gradient(180deg, #2a1f3a 0%, #1a1230 60%, #050207 100%);
+  }
+  .scene--kettle {
+    background:
+      radial-gradient(circle at 50% 60%, rgba(180,200,220,0.4) 0%, transparent 60%),
+      linear-gradient(180deg, #1a1a28 0%, #050507 100%);
+  }
+
+  /* Animations */
+  @keyframes sc-pulse {
+    0%, 100% { opacity: 1; }
+    50%      { opacity: 0.55; }
+  }
+  @keyframes sc-pillpulse {
+    0%, 100% { transform: scale(1); }
+    50%      { transform: scale(1.08); }
+  }
+  @keyframes sc-snow {
+    0%, 100% { background-position: 0 0, 2px 2px; }
+    25%      { background-position: 1px 2px, 0 1px; }
+    50%      { background-position: 2px 1px, 1px 0; }
+    75%      { background-position: 0 2px, 2px 1px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>
+    Static Channel — UI States
+    <small>2026-06-01 v0.2 · 一页看全游戏每个阶段长什么样 · 真实 CSS, 真实文案</small>
+  </h1>
+  <p class="sub">
+    每张是一个 mini app 全栈 (header + ticker + TV + dial + stay-on-air + keep + 进度), 320px 宽, 完全按 <code style="color:var(--amber-soft);background:rgba(0,0,0,0.4);padding:1px 5px;border-radius:2px;font-family:ui-monospace">src/StaticChannel/*.tsx + *.less</code> 抓的样式. 频道图用 SVG/CSS 模拟 VHS 配色 (实际是 wdabuliu API 出的图).
+  </p>
+  <div class="legend">
+    <b>状态机大致</b>: 首次打开 → <b>拖动</b> → <b>停下设值</b> → 频率从未生成过 ⇒ 自动调用 gen-image, 中间 caption 走 <code>meta</code> / <code>image</code> 相. 频率已有 broadcast (自己或别人) ⇒ 直接接进, 不重生. 之后就是 keep ♡ / Stay On Air / 翻 Wall 看别人 / 红点提醒.
+  </div>
+</header>
+
+<main>
+
+  <!-- ─── 1 · FIRST BOOT ─────────────────────────────────────────── -->
+  <div class="card">
+    <div class="card__head">
+      <div class="card__phase">① 首次打开 · 还没动过</div>
+      <div class="card__title">提示 drag to tune, ticker 还没人发</div>
+    </div>
+    <div class="stage-wrap"><div class="sc">
+      <div class="sc-hdr">
+        <div class="sc-hdr__brand">
+          <span class="sc-hdr__logo">◉</span>
+          <span class="sc-hdr__name">STATIC CHANNEL</span>
+        </div>
+        <button class="sc-iconbtn">♪</button>
+      </div>
+      <div class="sc-ticker-wrap">
+        <div class="sc-ticker">
+          <span class="sc-ticker__dot">◉</span>
+          <span class="sc-ticker__body"><span class="sc-ticker__sub sc-ticker__sub--empty">nothing on the wire yet · be the first</span></span>
+        </div>
+      </div>
+      <div class="sc-tv"><div class="sc-tv__cab">
+        <div class="sc-tv__screen">
+          <div class="sc-tv__snow sc-tv__snow--heavy"></div>
+          <div class="sc-tv__chyron sc-tv__chyron--top">
+            <span class="sc-tv__freq">95.4 <em>MHz</em></span>
+          </div>
+          <div class="sc-tv__hint">↔ drag the screen to tune</div>
+          <div class="sc-tv__scanlines"></div>
+          <div class="sc-tv__vignette"></div>
+        </div>
+        <div class="sc-tv__bezel-bottom"><span>STATIC CHANNEL</span><span>95.4</span></div>
+      </div></div>
+      <div class="sc-dial"><div class="sc-dial__viewport">
+        <div class="sc-dial__tape">
+          <div class="sc-dial__tick"></div><div class="sc-dial__tick"></div><div class="sc-dial__tick--half"></div><div class="sc-dial__tick"></div><div class="sc-dial__tick"></div>
+          <div class="sc-dial__tick sc-dial__tick--major"><span class="sc-dial__num">95</span></div>
+          <div class="sc-dial__tick"></div><div class="sc-dial__tick"></div><div class="sc-dial__tick--half"></div><div class="sc-dial__tick"></div><div class="sc-dial__tick"></div>
+          <div class="sc-dial__tick sc-dial__tick--major"><span class="sc-dial__num">96</span></div>
+          <div class="sc-dial__tick"></div><div class="sc-dial__tick"></div><div class="sc-dial__tick--half"></div><div class="sc-dial__tick"></div><div class="sc-dial__tick"></div>
+        </div>
+        <div class="sc-dial__shroud sc-dial__shroud--left"></div>
+        <div class="sc-dial__shroud sc-dial__shroud--right"></div>
+        <div class="sc-dial__pointer"></div>
+      </div></div>
+      <div class="sc-stay is-disabled">
+        <input class="sc-stay__input" placeholder="tune in first" disabled />
+        <button class="sc-stay__send">STAY ON AIR</button>
+      </div>
+      <div class="sc-footer">
+        <button class="sc-keep is-disabled"><span class="sc-keep__heart">♡</span>KEEP</button>
+      </div>
+    </div></div>
+    <div class="card__note">
+      初始 freq 在 88–108 间随机 (代码: <code>88 + Math.random()*20</code>). TV 全屏雪花, hint <em>↔ drag the screen to tune</em> 居中脉动. Ticker 空态. Keep 和 Stay On Air 都灰着, 因为没信号。
+    </div>
+  </div>
+
+  <!-- ─── 2 · DRAGGING ───────────────────────────────────────── -->
+  <div class="card">
+    <div class="card__head">
+      <div class="card__phase">② 正在拖动 · isDragging</div>
+      <div class="card__title">满屏雪花, dial 跟手走</div>
+    </div>
+    <div class="stage-wrap"><div class="sc">
+      <div class="sc-hdr">
+        <div class="sc-hdr__brand"><span class="sc-hdr__logo">◉</span><span class="sc-hdr__name">STATIC CHANNEL</span></div>
+        <button class="sc-iconbtn">♪</button>
+      </div>
+      <div class="sc-ticker-wrap"><div class="sc-ticker">
+        <span class="sc-ticker__dot">◉</span>
+        <span class="sc-ticker__body"><span class="sc-ticker__sub sc-ticker__sub--empty">nothing on the wire yet · be the first</span></span>
+      </div></div>
+      <div class="sc-tv"><div class="sc-tv__cab">
+        <div class="sc-tv__screen">
+          <div class="sc-tv__snow sc-tv__snow--heavy"></div>
+          <div class="sc-tv__chyron sc-tv__chyron--top">
+            <span class="sc-tv__freq">92.7 <em>MHz</em></span>
+          </div>
+          <div class="sc-tv__caption">NO SIGNAL</div>
+          <div class="sc-tv__scanlines"></div>
+          <div class="sc-tv__vignette"></div>
+        </div>
+        <div class="sc-tv__bezel-bottom"><span>STATIC CHANNEL</span><span>92.7</span></div>
+      </div></div>
+      <div class="sc-dial"><div class="sc-dial__viewport">
+        <div class="sc-dial__tape" style="transform: translateX(calc(-50% + 28px));">
+          <div class="sc-dial__tick"></div><div class="sc-dial__tick--half"></div><div class="sc-dial__tick"></div>
+          <div class="sc-dial__tick sc-dial__tick--major"><span class="sc-dial__num">92</span></div>
+          <div class="sc-dial__tick"></div><div class="sc-dial__tick"></div><div class="sc-dial__tick--half"></div><div class="sc-dial__tick"></div><div class="sc-dial__tick"></div>
+          <div class="sc-dial__tick sc-dial__tick--major"><span class="sc-dial__num">93</span></div>
+          <div class="sc-dial__tick"></div><div class="sc-dial__tick"></div><div class="sc-dial__tick--half"></div><div class="sc-dial__tick"></div><div class="sc-dial__tick"></div>
+          <div class="sc-dial__tick sc-dial__tick--major"><span class="sc-dial__num">94</span></div>
+        </div>
+        <div class="sc-dial__shroud sc-dial__shroud--left"></div>
+        <div class="sc-dial__shroud sc-dial__shroud--right"></div>
+        <div class="sc-dial__pointer"></div>
+      </div></div>
+      <div class="sc-stay is-disabled">
+        <input class="sc-stay__input" placeholder="tune in first" disabled />
+        <button class="sc-stay__send">STAY ON AIR</button>
+      </div>
+      <div class="sc-footer">
+        <button class="sc-keep is-disabled"><span class="sc-keep__heart">♡</span>KEEP</button>
+      </div>
+    </div></div>
+    <div class="card__note">
+      手指在屏 (或 dial) 上滑动时. snowLevel = 1, 全屏雪花覆盖图. hint 消失, 顶部只剩 freq + caption <em>NO SIGNAL</em>. 嘶嘶声跟着速度调音量. 同样的灵敏度 = TV 80 px/MHz, dial 36 px/MHz 锁刻度间距 1:1 跟手。
+    </div>
+  </div>
+
+  <!-- ─── 3 · GENERATING (meta / image) ─────────────────────── -->
+  <div class="card">
+    <div class="card__head">
+      <div class="card__phase">③ 调进新频率 · 后台生图</div>
+      <div class="card__title">pulling something in… → picture coming up…</div>
+    </div>
+    <div class="stage-wrap"><div class="sc">
+      <div class="sc-hdr">
+        <div class="sc-hdr__brand"><span class="sc-hdr__logo">◉</span><span class="sc-hdr__name">STATIC CHANNEL</span></div>
+        <button class="sc-iconbtn">♪</button>
+      </div>
+      <div class="sc-ticker-wrap"><div class="sc-ticker">
+        <span class="sc-ticker__dot">◉</span>
+        <span class="sc-ticker__body"><span class="sc-ticker__sub sc-ticker__sub--empty">nothing on the wire yet · be the first</span></span>
+      </div></div>
+      <div class="sc-tv"><div class="sc-tv__cab">
+        <div class="sc-tv__screen">
+          <div class="sc-tv__snow sc-tv__snow--mid" style="opacity:0.75;"></div>
+          <div class="sc-tv__chyron sc-tv__chyron--top">
+            <span class="sc-tv__freq">92.7 <em>MHz</em></span>
+          </div>
+          <div class="sc-tv__caption">the picture is coming up…</div>
+          <div class="sc-tv__scanlines"></div>
+          <div class="sc-tv__vignette"></div>
+        </div>
+        <div class="sc-tv__bezel-bottom"><span>STATIC CHANNEL</span><span>92.7</span></div>
+      </div></div>
+      <div class="sc-dial"><div class="sc-dial__viewport">
+        <div class="sc-dial__tape">
+          <div class="sc-dial__tick"></div><div class="sc-dial__tick"></div><div class="sc-dial__tick--half"></div><div class="sc-dial__tick"></div><div class="sc-dial__tick"></div>
+          <div class="sc-dial__tick sc-dial__tick--major"><span class="sc-dial__num">92</span></div>
+          <div class="sc-dial__tick"></div><div class="sc-dial__tick"></div><div class="sc-dial__tick--half"></div><div class="sc-dial__tick"></div><div class="sc-dial__tick"></div>
+          <div class="sc-dial__tick sc-dial__tick--major"><span class="sc-dial__num">93</span></div>
+        </div>
+        <div class="sc-dial__shroud sc-dial__shroud--left"></div>
+        <div class="sc-dial__shroud sc-dial__shroud--right"></div>
+        <div class="sc-dial__pointer"></div>
+      </div></div>
+      <div class="sc-stay is-disabled">
+        <input class="sc-stay__input" placeholder="tune in first" disabled />
+        <button class="sc-stay__send">STAY ON AIR</button>
+      </div>
+      <div class="sc-footer">
+        <button class="sc-keep is-disabled"><span class="sc-keep__heart">♡</span>KEEP</button>
+      </div>
+    </div></div>
+    <div class="card__note">
+      松手 + 没有人在 92.7 广播过 ⇒ 触发 <code>useChannel.fetchChannel</code>. 阶段 1: <em>pulling something in…</em> (meta, 模型出 channelName+subtitle+prompt, ~2s, snow 0.95). 阶段 2: <em>picture is coming up…</em> (image-gen, ~30-60s, snow 降到 0.75). 失败重试时显示 <em>signal lost · trying again · 3s</em>。
+    </div>
+  </div>
+
+  <!-- ─── 4 · LOCKED IN · VIRGIN FREQ ──────────────────────── -->
+  <div class="card">
+    <div class="card__head">
+      <div class="card__phase">④ 锁台 · 处女频率</div>
+      <div class="card__title">你是第一个调到这里的人</div>
+    </div>
+    <div class="stage-wrap"><div class="sc">
+      <div class="sc-hdr">
+        <div class="sc-hdr__brand"><span class="sc-hdr__logo">◉</span><span class="sc-hdr__name">STATIC CHANNEL</span></div>
+        <button class="sc-iconbtn">♪</button>
+      </div>
+      <div class="sc-ticker-wrap"><div class="sc-ticker">
+        <span class="sc-ticker__dot">◉</span>
+        <span class="sc-ticker__body"><span class="sc-ticker__sub sc-ticker__sub--empty">nothing on the wire yet · be the first</span></span>
+      </div></div>
+      <div class="sc-tv"><div class="sc-tv__cab">
+        <div class="sc-tv__screen">
+          <div class="scene scene--kitchen" style="position:absolute;inset:0;"></div>
+          <div class="sc-tv__snow" style="opacity:0.06"></div>
+          <div class="sc-tv__chyron sc-tv__chyron--top">
+            <span class="sc-tv__freq">92.7 <em>MHz</em></span>
+            <span class="sc-tv__call">WGRT-7</span>
+          </div>
+          <div class="sc-tv__chyron sc-tv__chyron--bot">
+            <span class="sc-tv__sub">your mom is rolling dumplings, kitchen radio on, 1994</span>
+          </div>
+          <div class="sc-tv__scanlines"></div>
+          <div class="sc-tv__vignette"></div>
+        </div>
+        <div class="sc-tv__bezel-bottom"><span>STATIC CHANNEL</span><span>92.7</span></div>
+      </div></div>
+      <div class="sc-dial"><div class="sc-dial__viewport">
+        <div class="sc-dial__tape">
+          <div class="sc-dial__tick"></div><div class="sc-dial__tick"></div><div class="sc-dial__tick--half"></div><div class="sc-dial__tick"></div><div class="sc-dial__tick"></div>
+          <div class="sc-dial__tick sc-dial__tick--major"><span class="sc-dial__num">92</span></div>
+          <div class="sc-dial__tick"></div><div class="sc-dial__tick"></div><div class="sc-dial__tick--half"></div><div class="sc-dial__tick"></div><div class="sc-dial__tick"></div>
+          <div class="sc-dial__tick sc-dial__tick--major"><span class="sc-dial__num">93</span></div>
+        </div>
+        <div class="sc-dial__shroud sc-dial__shroud--left"></div>
+        <div class="sc-dial__shroud sc-dial__shroud--right"></div>
+        <div class="sc-dial__pointer"></div>
+      </div></div>
+      <div class="sc-stay is-disabled">
+        <input class="sc-stay__input" placeholder="tune in first" disabled />
+        <button class="sc-stay__send">STAY ON AIR</button>
+      </div>
+      <div class="sc-footer">
+        <button class="sc-keep"><span class="sc-keep__heart">♡</span>KEEP</button>
+      </div>
+    </div></div>
+    <div class="card__note">
+      生成完毕. 顶部 chyron 显示 <em>WGRT-7</em>, 底部 VT323 字幕显示 subtitle. snow ≈ 0.06. KEEP 现在亮起来 (橘红渐变) — 按下会把这段公开成你 anchor segment + bookmark. Stay On Air 仍然灰着, 因为还没有"已存在 broadcast"(我们刚生, 还没回写)。
+    </div>
+  </div>
+
+  <!-- ─── 5 · KEPT ────────────────────────────────────────── -->
+  <div class="card">
+    <div class="card__head">
+      <div class="card__phase">⑤ 已 KEEP · ♥ 填充</div>
+      <div class="card__title">按钮变 KEPT, 数据已上报</div>
+    </div>
+    <div class="stage-wrap"><div class="sc">
+      <div class="sc-hdr">
+        <div class="sc-hdr__brand"><span class="sc-hdr__logo">◉</span><span class="sc-hdr__name">STATIC CHANNEL</span></div>
+        <button class="sc-iconbtn">♪</button>
+      </div>
+      <div class="sc-ticker-wrap"><div class="sc-ticker">
+        <span class="sc-ticker__dot">◉</span>
+        <span class="sc-ticker__body"><span class="sc-ticker__sub sc-ticker__sub--empty">nothing on the wire yet · be the first</span></span>
+      </div></div>
+      <div class="sc-tv"><div class="sc-tv__cab">
+        <div class="sc-tv__screen">
+          <div class="scene scene--kitchen" style="position:absolute;inset:0;"></div>
+          <div class="sc-tv__snow" style="opacity:0.06"></div>
+          <div class="sc-tv__chyron sc-tv__chyron--top">
+            <span class="sc-tv__freq">92.7 <em>MHz</em></span>
+            <span class="sc-tv__call">WGRT-7</span>
+          </div>
+          <div class="sc-tv__chyron sc-tv__chyron--bot">
+            <span class="sc-tv__sub">your mom is rolling dumplings, kitchen radio on, 1994</span>
+          </div>
+          <div class="sc-tv__scanlines"></div>
+          <div class="sc-tv__vignette"></div>
+        </div>
+        <div class="sc-tv__bezel-bottom"><span>STATIC CHANNEL</span><span>92.7</span></div>
+      </div></div>
+      <div class="sc-dial"><div class="sc-dial__viewport">
+        <div class="sc-dial__tape">
+          <div class="sc-dial__tick"></div><div class="sc-dial__tick"></div><div class="sc-dial__tick--half"></div><div class="sc-dial__tick"></div><div class="sc-dial__tick"></div>
+          <div class="sc-dial__tick sc-dial__tick--major"><span class="sc-dial__num">92</span></div>
+          <div class="sc-dial__tick"></div><div class="sc-dial__tick"></div><div class="sc-dial__tick--half"></div><div class="sc-dial__tick"></div><div class="sc-dial__tick"></div>
+          <div class="sc-dial__tick sc-dial__tick--major"><span class="sc-dial__num">93</span></div>
+        </div>
+        <div class="sc-dial__shroud sc-dial__shroud--left"></div>
+        <div class="sc-dial__shroud sc-dial__shroud--right"></div>
+        <div class="sc-dial__pointer"></div>
+      </div></div>
+      <div class="sc-stay">
+        <input class="sc-stay__input" placeholder="what plays next?" />
+        <button class="sc-stay__send">STAY ON AIR</button>
+      </div>
+      <div class="sc-footer">
+        <button class="sc-keep is-kept"><span class="sc-keep__heart">♥</span>KEPT</button>
+      </div>
+    </div></div>
+    <div class="card__note">
+      按下 KEEP 之后. 按钮变 <em>KEPT</em> 描边奶白. 后台 <code>save.persist({ segments, bookmarks })</code> 写完, <code>wall.refresh()</code> 拉回新状态 → 现在 activeBroadcast 有了 (含你自己), Stay On Air 解锁, 可以接龙下一段。
+    </div>
+  </div>
+
+  <!-- ─── 6 · LOCKED IN · EXISTING BROADCAST ───────────────── -->
+  <div class="card">
+    <div class="card__head">
+      <div class="card__phase">⑥ 调进别人的电台 · 多段 broadcast</div>
+      <div class="card__title">右上角 •••N · 作者名, ticker 红药丸</div>
+    </div>
+    <div class="stage-wrap"><div class="sc">
+      <div class="sc-hdr">
+        <div class="sc-hdr__brand"><span class="sc-hdr__logo">◉</span><span class="sc-hdr__name">STATIC CHANNEL</span></div>
+        <button class="sc-iconbtn">♪</button>
+      </div>
+      <div class="sc-ticker-wrap"><div class="sc-ticker">
+        <span class="sc-ticker__dot">◉</span>
+        <span class="sc-ticker__body">
+          <span class="sc-ticker__avatar">B</span>
+          <span class="sc-ticker__name">Bob</span>
+          <span class="sc-ticker__sep">·</span>
+          <span class="sc-ticker__verb">added to 101.3</span>
+          <span class="sc-ticker__sep">·</span>
+          <span class="sc-ticker__sub">a recipe show, no one is listening, mid-segment</span>
+        </span>
+        <span class="sc-ticker__pill">3 NEW</span>
+      </div></div>
+      <div class="sc-tv"><div class="sc-tv__cab">
+        <div class="sc-tv__screen">
+          <div class="scene scene--wedding" style="position:absolute;inset:0;"></div>
+          <div class="sc-tv__snow" style="opacity:0.06"></div>
+          <div class="sc-tv__chyron sc-tv__chyron--top">
+            <span class="sc-tv__freq">99.1 <em>MHz</em></span>
+            <span class="sc-tv__call">CH-LATE</span>
+          </div>
+          <div class="sc-tv__segments">
+            <span class="sc-tv__segments-dots">
+              <span class="sc-tv__segments-dot"></span>
+              <span class="sc-tv__segments-dot"></span>
+              <span class="sc-tv__segments-dot"></span>
+              <span class="sc-tv__segments-dot is-on"></span>
+            </span>
+            <span class="sc-tv__segments-label">4 · Jenny</span>
+          </div>
+          <div class="sc-tv__chyron sc-tv__chyron--bot">
+            <span class="sc-tv__sub">the host says goodnight to no one in particular</span>
+          </div>
+          <div class="sc-tv__scanlines"></div>
+          <div class="sc-tv__vignette"></div>
+        </div>
+        <div class="sc-tv__bezel-bottom"><span>STATIC CHANNEL</span><span>99.1</span></div>
+      </div></div>
+      <div class="sc-dial"><div class="sc-dial__viewport">
+        <div class="sc-dial__tape">
+          <div class="sc-dial__tick"></div><div class="sc-dial__tick"></div><div class="sc-dial__tick--half"></div><div class="sc-dial__tick"></div>
+          <div class="sc-dial__tick sc-dial__tick--major"><span class="sc-dial__num">99</span></div>
+          <div class="sc-dial__tick"></div><div class="sc-dial__tick"></div><div class="sc-dial__tick--half"></div><div class="sc-dial__tick"></div><div class="sc-dial__tick"></div>
+          <div class="sc-dial__tick sc-dial__tick--major"><span class="sc-dial__num">100</span></div>
+        </div>
+        <div class="sc-dial__shroud sc-dial__shroud--left"></div>
+        <div class="sc-dial__shroud sc-dial__shroud--right"></div>
+        <div class="sc-dial__pointer"></div>
+      </div></div>
+      <div class="sc-stay">
+        <input class="sc-stay__input" placeholder="what plays next?" />
+        <button class="sc-stay__send">STAY ON AIR</button>
+      </div>
+      <div class="sc-footer">
+        <button class="sc-keep"><span class="sc-keep__heart">♡</span>KEEP</button>
+      </div>
+    </div></div>
+    <div class="card__note">
+      调到 99.1, wall 里已经存在 4 段广播. <code>onSettle</code> 直接接进别人的电台 — 不重生. 右上角 segment pill 显示 <em>•••4 · Jenny</em> (Jenny = 最新段作者). Ticker 显示某人刚加了一段 + 你 keep 过的频率有 3 段新内容 (红药丸). KEEP 这里 = 单纯 bookmark 这条线, 不烧生图。
+    </div>
+  </div>
+
+  <!-- ─── 7 · STAY ON AIR — BUSY ───────────────────────────── -->
+  <div class="card">
+    <div class="card__head">
+      <div class="card__phase">⑦ Stay On Air 生成中</div>
+      <div class="card__title">composer 锁住, 画面保持上一段</div>
+    </div>
+    <div class="stage-wrap"><div class="sc">
+      <div class="sc-hdr">
+        <div class="sc-hdr__brand"><span class="sc-hdr__logo">◉</span><span class="sc-hdr__name">STATIC CHANNEL</span></div>
+        <button class="sc-iconbtn">♪</button>
+      </div>
+      <div class="sc-ticker-wrap"><div class="sc-ticker">
+        <span class="sc-ticker__dot">◉</span>
+        <span class="sc-ticker__body">
+          <span class="sc-ticker__avatar">B</span>
+          <span class="sc-ticker__name">Bob</span>
+          <span class="sc-ticker__sep">·</span>
+          <span class="sc-ticker__verb">added to 101.3</span>
+          <span class="sc-ticker__sep">·</span>
+          <span class="sc-ticker__sub">a recipe show, no one is listening, mid-segment</span>
+        </span>
+      </div></div>
+      <div class="sc-tv"><div class="sc-tv__cab">
+        <div class="sc-tv__screen">
+          <div class="scene scene--wedding" style="position:absolute;inset:0;"></div>
+          <div class="sc-tv__snow" style="opacity:0.06"></div>
+          <div class="sc-tv__chyron sc-tv__chyron--top">
+            <span class="sc-tv__freq">99.1 <em>MHz</em></span>
+            <span class="sc-tv__call">CH-LATE</span>
+          </div>
+          <div class="sc-tv__segments">
+            <span class="sc-tv__segments-dots">
+              <span class="sc-tv__segments-dot"></span>
+              <span class="sc-tv__segments-dot"></span>
+              <span class="sc-tv__segments-dot"></span>
+              <span class="sc-tv__segments-dot is-on"></span>
+            </span>
+            <span class="sc-tv__segments-label">4 · Jenny</span>
+          </div>
+          <div class="sc-tv__chyron sc-tv__chyron--bot">
+            <span class="sc-tv__sub">the host says goodnight to no one in particular</span>
+          </div>
+          <div class="sc-tv__scanlines"></div>
+          <div class="sc-tv__vignette"></div>
+        </div>
+        <div class="sc-tv__bezel-bottom"><span>STATIC CHANNEL</span><span>99.1</span></div>
+      </div></div>
+      <div class="sc-dial"><div class="sc-dial__viewport">
+        <div class="sc-dial__tape">
+          <div class="sc-dial__tick"></div><div class="sc-dial__tick"></div><div class="sc-dial__tick--half"></div><div class="sc-dial__tick"></div>
+          <div class="sc-dial__tick sc-dial__tick--major"><span class="sc-dial__num">99</span></div>
+          <div class="sc-dial__tick"></div><div class="sc-dial__tick"></div><div class="sc-dial__tick--half"></div><div class="sc-dial__tick"></div><div class="sc-dial__tick"></div>
+          <div class="sc-dial__tick sc-dial__tick--major"><span class="sc-dial__num">100</span></div>
+        </div>
+        <div class="sc-dial__shroud sc-dial__shroud--left"></div>
+        <div class="sc-dial__shroud sc-dial__shroud--right"></div>
+        <div class="sc-dial__pointer"></div>
+      </div></div>
+      <div class="sc-stay is-busy">
+        <input class="sc-stay__input sc-stay__input--filled" value="someone calls in" disabled />
+        <button class="sc-stay__send">ON AIR…</button>
+      </div>
+      <div class="sc-footer">
+        <button class="sc-keep"><span class="sc-keep__heart">♡</span>KEEP</button>
+      </div>
+    </div></div>
+    <div class="card__note">
+      用户填了 <em>someone calls in</em> → 按下 STAY ON AIR. 中间 ~30s 走 <code>extendChannel</code>: LLM 写下一段 subtitle + imagePrompt, 接 wdabuliu 生成新图. composer 锁住, 显示 <em>ON AIR…</em>. 画面保持原段, 不闪屏。
+    </div>
+  </div>
+
+  <!-- ─── 8 · WALL — TONIGHT TAB ────────────────────────── -->
+  <div class="card">
+    <div class="card__head">
+      <div class="card__phase">⑧ Wall · 今夜 tab</div>
+      <div class="card__title">所有 broadcast, 按 lastTs 倒序</div>
+    </div>
+    <div class="stage-wrap"><div class="sc">
+      <div class="sc-wall" style="position:relative;height:480px">
+        <div class="sc-wall__bar">
+          <button class="sc-wall__tab is-active">TONIGHT</button>
+          <button class="sc-wall__tab">KEPT · 3</button>
+          <button class="sc-wall__close">×</button>
+        </div>
+        <div class="sc-wall__scroll">
+
+          <div class="sc-wall__card">
+            <div class="sc-wall__pic-wrap">
+              <div class="scene scene--wedding" style="position:absolute;inset:0;"></div>
+              <div class="sc-wall__pic-scan"></div>
+              <div class="sc-wall__pic-vign"></div>
+              <span class="sc-wall__freq">99.1</span>
+              <span class="sc-wall__segpill">•••4</span>
+            </div>
+            <div class="sc-wall__meta">
+              <div class="sc-wall__top">
+                <span class="sc-wall__call">CH-LATE</span>
+                <span class="sc-wall__author"><span class="sc-wall__avatar">J</span>Jenny</span>
+              </div>
+              <div class="sc-wall__sub">the host says goodnight to no one in particular</div>
+            </div>
+          </div>
+
+          <div class="sc-wall__card">
+            <div class="sc-wall__pic-wrap">
+              <div class="scene scene--kettle" style="position:absolute;inset:0;"></div>
+              <div class="sc-wall__pic-scan"></div>
+              <div class="sc-wall__pic-vign"></div>
+              <span class="sc-wall__freq">101.3</span>
+              <span class="sc-wall__segpill">•••2</span>
+            </div>
+            <div class="sc-wall__meta">
+              <div class="sc-wall__top">
+                <span class="sc-wall__call">K88-NORTH</span>
+                <span class="sc-wall__author"><span class="sc-wall__avatar">B</span>Bob</span>
+              </div>
+              <div class="sc-wall__sub">a recipe show, no one is listening, mid-segment</div>
+            </div>
+          </div>
+
+          <div class="sc-wall__card">
+            <div class="sc-wall__pic-wrap">
+              <div class="scene scene--kitchen" style="position:absolute;inset:0;"></div>
+              <div class="sc-wall__pic-scan"></div>
+              <div class="sc-wall__pic-vign"></div>
+              <span class="sc-wall__freq">92.7</span>
+            </div>
+            <div class="sc-wall__meta">
+              <div class="sc-wall__top">
+                <span class="sc-wall__call">WGRT-7</span>
+                <span class="sc-wall__author sc-wall__author--you">YOU</span>
+              </div>
+              <div class="sc-wall__sub">your mom is rolling dumplings, kitchen radio on, 1994</div>
+            </div>
+          </div>
+
+          <div class="sc-wall__card">
+            <div class="sc-wall__pic-wrap">
+              <div class="scene scene--pearl" style="position:absolute;inset:0;"></div>
+              <div class="sc-wall__pic-scan"></div>
+              <div class="sc-wall__pic-vign"></div>
+              <span class="sc-wall__freq">88.5</span>
+              <span class="sc-wall__segpill">•••6</span>
+            </div>
+            <div class="sc-wall__meta">
+              <div class="sc-wall__top">
+                <span class="sc-wall__call">ZONE-9</span>
+                <span class="sc-wall__author"><span class="sc-wall__avatar">A</span>Algram</span>
+              </div>
+              <div class="sc-wall__sub">a lounge piano, the lid half-down, no audience</div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div></div>
+    <div class="card__note">
+      点 ticker 或 KEPT 按钮打开. 每行 = 一条 broadcast. 缩略图 = 最新段图. 右上角 <em>•••N</em> 显示总段数. 右下作者名 = 最新段作者 (你的会显示 YOU). 点行 → 跳到那个频率 + 关 Wall。
+    </div>
+  </div>
+
+  <!-- ─── 9 · WALL — KEPT TAB WITH NEW ──────────────────── -->
+  <div class="card">
+    <div class="card__head">
+      <div class="card__phase">⑨ Wall · 你 KEEP 的频道有新段</div>
+      <div class="card__title">橘红 glow + 红点 = 自上次以来有人加段了</div>
+    </div>
+    <div class="stage-wrap"><div class="sc">
+      <div class="sc-wall" style="position:relative;height:480px">
+        <div class="sc-wall__bar">
+          <button class="sc-wall__tab">TONIGHT</button>
+          <button class="sc-wall__tab is-active">KEPT · 3</button>
+          <button class="sc-wall__close">×</button>
+        </div>
+        <div class="sc-wall__scroll">
+
+          <div class="sc-wall__card has-new">
+            <div class="sc-wall__pic-wrap">
+              <div class="scene scene--wedding" style="position:absolute;inset:0;"></div>
+              <div class="sc-wall__pic-scan"></div>
+              <div class="sc-wall__pic-vign"></div>
+              <span class="sc-wall__freq">99.1</span>
+              <span class="sc-wall__segpill">•••4</span>
+            </div>
+            <div class="sc-wall__meta">
+              <div class="sc-wall__top">
+                <span class="sc-wall__call">CH-LATE</span>
+                <span class="sc-wall__author"><span class="sc-wall__avatar">J</span>Jenny</span>
+              </div>
+              <div class="sc-wall__sub">the host says goodnight to no one in particular</div>
+            </div>
+            <span class="sc-wall__newdot"></span>
+          </div>
+
+          <div class="sc-wall__card">
+            <div class="sc-wall__pic-wrap">
+              <div class="scene scene--kitchen" style="position:absolute;inset:0;"></div>
+              <div class="sc-wall__pic-scan"></div>
+              <div class="sc-wall__pic-vign"></div>
+              <span class="sc-wall__freq">92.7</span>
+            </div>
+            <div class="sc-wall__meta">
+              <div class="sc-wall__top">
+                <span class="sc-wall__call">WGRT-7</span>
+                <span class="sc-wall__author sc-wall__author--you">YOU</span>
+              </div>
+              <div class="sc-wall__sub">your mom is rolling dumplings, kitchen radio on, 1994</div>
+            </div>
+          </div>
+
+          <div class="sc-wall__card has-new">
+            <div class="sc-wall__pic-wrap">
+              <div class="scene scene--testpattern" style="position:absolute;inset:0;"></div>
+              <div class="sc-wall__pic-scan"></div>
+              <div class="sc-wall__pic-vign"></div>
+              <span class="sc-wall__freq">107.5</span>
+              <span class="sc-wall__segpill">•••3</span>
+            </div>
+            <div class="sc-wall__meta">
+              <div class="sc-wall__top">
+                <span class="sc-wall__call">K88-WEST</span>
+                <span class="sc-wall__author"><span class="sc-wall__avatar">G</span>ghostpixel</span>
+              </div>
+              <div class="sc-wall__sub">test pattern for a town that no longer exists</div>
+            </div>
+            <span class="sc-wall__newdot"></span>
+          </div>
+
+        </div>
+      </div>
+    </div></div>
+    <div class="card__note">
+      KEPT tab 只显示你 bookmark 的频率. 有新段的两张获得 <em>橘红描边 + glow + 右上角红点脉动</em> — 别人在你的电台上加了新段. 点进 → 调到那个频率, lastSeenTs 自动推进 → 红点清掉。
+    </div>
+  </div>
+
+</main>
+
+<div class="legend" style="margin-top: 36px;">
+  <b>不在这页里的, 说明清楚</b>:
+  <br>· <b>声音</b> — 拖动时白噪声音量跟速度走, 锁台后 hiss = 0. 没做 audio test 页因为这游戏不需要 TTS。
+  <br>· <b>真实生图</b> — 每个频道的图是 wdabuliu API 出的, 风格在 <code>prompts.ts</code> 里钉死: <em>"shot on degraded VHS tape, scan lines, CRT phosphor glow, slight chromatic aberration, 4:3 aspect, washed faded colors, no text"</em>. 这里用 CSS gradient 替代示意。
+  <br>· <b>动画</b> — TV 雪花 100% 噪声 (这里 CSS 模拟得粗); ticker 圆点 2.4s 呼吸; 红药丸 1.6s 缩放; 新段红点 1.5s 脉动. 全跟生产一致。
+  <br>· <b>缩放比例</b> — 实机 460px 宽, 这里 320px (~70%), 所有字号比例放大了一点点防止过小. dial 刻度数量也减了。
+</div>
+
+</div>
+</body>
+</html>
