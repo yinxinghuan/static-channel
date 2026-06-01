@@ -20,11 +20,14 @@ export type TVProps = {
   onPointerDown: (e: React.PointerEvent) => void;
   showHint: boolean;
   hintText: string;
+  // Segment indicator — only shown when the active broadcast has ≥ 2 segments.
+  segmentCount?: number;
+  latestAuthorName?: string;
 };
 
 export default function TV({
   freq, snappedFreq, snowLevel, channelName, subtitle, imageUrl, caption,
-  onPointerDown, showHint, hintText,
+  onPointerDown, showHint, hintText, segmentCount, latestAuthorName,
 }: TVProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -89,6 +92,19 @@ export default function TV({
           {snowLevel < 0.4 && subtitle && (
             <div className="sc-tv__chyron sc-tv__chyron--bot">
               <span className="sc-tv__sub">{subtitle}</span>
+            </div>
+          )}
+
+          {snowLevel < 0.4 && segmentCount != null && segmentCount >= 2 && (
+            <div className="sc-tv__segments" aria-label="segment count">
+              <span className="sc-tv__segments-dots" aria-hidden="true">
+                {Array.from({ length: Math.min(5, segmentCount) }, (_, i) => (
+                  <span key={i} className={`sc-tv__segments-dot ${i === Math.min(5, segmentCount) - 1 ? 'is-on' : ''}`} />
+                ))}
+              </span>
+              <span className="sc-tv__segments-label">
+                {segmentCount}{latestAuthorName ? ` · ${latestAuthorName}` : ''}
+              </span>
             </div>
           )}
 

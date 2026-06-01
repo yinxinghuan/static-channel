@@ -163,6 +163,52 @@
     text-shadow: 0 0 8px rgba(0,0,0,0.85), 0 0 14px rgba(120,255,180,0.25);
   }
 
+  &__segments {
+    position: absolute;
+    top: 8px;
+    right: 10px;
+    z-index: 8;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 7px;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.55);
+    border: 1px solid rgba(255, 220, 160, 0.35);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 10px;
+    color: #ffd9a0;
+    letter-spacing: 0.06em;
+    pointer-events: none;
+    text-shadow: 0 1px 0 rgba(0,0,0,0.6);
+  }
+
+  &__segments-dots {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+  }
+
+  &__segments-dot {
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: rgba(255, 220, 160, 0.35);
+
+    &.is-on {
+      background: #ff8a3a;
+      box-shadow: 0 0 4px rgba(255, 138, 58, 0.7);
+    }
+  }
+
+  &__segments-label {
+    font-weight: 700;
+    max-width: 90px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
   &__hint {
     position: absolute;
     left: 50%;

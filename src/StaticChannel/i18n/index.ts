@@ -9,6 +9,7 @@ const STR: Record<Locale, Record<string, string>> = {
     'tuning.gen_image': 'the picture is coming up…',
     'tuning.retry': 'signal lost · trying again',
     'tuning.error': 'dead air · try another frequency',
+    'tuning.extending': 'staying on the air…',
     'channel.now': 'NOW PLAYING',
     'save.saved': 'KEPT',
     'save.keep': 'KEEP',
@@ -25,6 +26,18 @@ const STR: Record<Locale, Record<string, string>> = {
     'nav.wall': 'WALL',
     'mute.on': 'SOUND ON',
     'mute.off': 'MUTED',
+    'ticker.empty': 'nothing on the wire yet · be the first',
+    'ticker.added': 'added to {f}',
+    'ticker.new_pill': '{n} new',
+    'ticker.open_wall': 'open wall',
+    'stay.placeholder': 'what plays next?',
+    'stay.send': 'STAY ON AIR',
+    'stay.sending': 'on air…',
+    'stay.disabled_no_signal': 'tune in first',
+    'segments.count': '{n} segments',
+    'segments.count_one': '1 segment',
+    'segments.latest_by': 'latest · {who}',
+    'broadcast.no_signal_yet': 'first to tune in here',
   },
   zh: {
     'hint.drag': '左右拖动屏幕调台',
@@ -34,6 +47,7 @@ const STR: Record<Locale, Record<string, string>> = {
     'tuning.gen_image': '画面就要出来了…',
     'tuning.retry': '信号弱了 · 再试',
     'tuning.error': '一片死寂 · 换个频率',
+    'tuning.extending': '正在续播…',
     'channel.now': '正在播放',
     'save.saved': '已留下',
     'save.keep': '留下',
@@ -50,6 +64,18 @@ const STR: Record<Locale, Record<string, string>> = {
     'nav.wall': '收藏',
     'mute.on': '有声',
     'mute.off': '静音',
+    'ticker.empty': '线路上还没动静 · 你来做第一个',
+    'ticker.added': '续到了 {f}',
+    'ticker.new_pill': '{n} 条新',
+    'ticker.open_wall': '打开收藏',
+    'stay.placeholder': '接下来播什么？',
+    'stay.send': '接着播',
+    'stay.sending': '直播中…',
+    'stay.disabled_no_signal': '先调进信号',
+    'segments.count': '{n} 段',
+    'segments.count_one': '1 段',
+    'segments.latest_by': '最新 · {who}',
+    'broadcast.no_signal_yet': '这条线还没人调到过',
   },
 };
 
@@ -63,11 +89,12 @@ function detectLocale(): Locale {
 
 let LOCALE: Locale = detectLocale();
 
-export function t(key: string, vars?: { n?: number | string; f?: number | string }): string {
+export function t(key: string, vars?: { n?: number | string; f?: number | string; who?: string }): string {
   let s = STR[LOCALE][key];
   if (!s) return key;
   if (vars?.n != null) s = s.replace('{n}', String(vars.n));
   if (vars?.f != null) s = s.replace('{f}', String(vars.f));
+  if (vars?.who != null) s = s.replace('{who}', String(vars.who));
   return s;
 }
 export function locale(): Locale { return LOCALE; }

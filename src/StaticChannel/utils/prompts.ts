@@ -49,6 +49,62 @@ export function userPromptForFreq(freq: number): string {
   return `Frequency: ${freq.toFixed(1)} MHz. Broadcast one channel.`;
 }
 
+// ─── Stay On Air: continue an existing broadcast ──────────────────────────
+// Caller supplies the channelName, the most recent subtitle, and an optional
+// one-line nudge from the player ("go weirder", "wake them up", etc.).
+
+export const CHANNEL_EXTEND_SYSTEM = `You are the signal pulled in by a late-night TV.
+You are continuing an EXISTING broadcast at the same frequency, on the same channel.
+The channel name STAYS the same — do not invent a new one.
+The new subtitle is what plays NEXT on that channel, after the prior segment.
+It must feel like the SAME station, the SAME night, the SAME signal — just a
+later moment in the broadcast. A new caller, a different segment of the show,
+a cut to b-roll, the host coming back from a break — pick whatever fits.
+
+Reply with ONLY a single-line minified JSON object. No prose.
+
+Schema:
+{ "subtitle": string, "imagePrompt": string }
+
+- subtitle: ONE evocative line, 4–14 words, plain text. No emojis. No quotes.
+  Refer back to the world implied by the prior subtitle, but ADVANCE it.
+- imagePrompt: SCENE description, 12–25 words, no people-names, no first-person.`;
+
+export function userPromptForExtend(args: {
+  freq: number;
+  channelName: string;
+  priorSubtitle: string;
+  nudge?: string;
+}): string {
+  const lines = [
+    `Frequency: ${args.freq.toFixed(1)} MHz.`,
+    `Channel: ${args.channelName}.`,
+    `Prior segment subtitle: ${args.priorSubtitle}`,
+  ];
+  if (args.nudge && args.nudge.trim()) {
+    lines.push(`Caller-in nudge for what plays next: ${args.nudge.trim().slice(0, 120)}`);
+  }
+  lines.push('Broadcast the next segment of this same channel.');
+  return lines.join('\n');
+}
+
+export function parseExtendJSON(raw: string): { subtitle: string; imagePrompt: string } | null {
+  const cleaned = raw.replace(/```json|```/gi, '').trim();
+  const start = cleaned.indexOf('{');
+  const end = cleaned.lastIndexOf('}');
+  if (start < 0 || end <= start) return null;
+  try {
+    const obj = JSON.parse(cleaned.slice(start, end + 1));
+    if (typeof obj.subtitle !== 'string' || typeof obj.imagePrompt !== 'string') return null;
+    return {
+      subtitle: obj.subtitle.slice(0, 140),
+      imagePrompt: obj.imagePrompt.slice(0, 400),
+    };
+  } catch (_) {
+    return null;
+  }
+}
+
 // Robust parse — model occasionally wraps in code fences or trailing prose.
 export function parseChannelJSON(raw: string): { channelName: string; subtitle: string; imagePrompt: string } | null {
   const cleaned = raw.replace(/```json|```/gi, '').trim();
