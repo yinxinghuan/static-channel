@@ -183,6 +183,37 @@ export function bandFor(freq: number): Band {
   return freq < BANDS[0].lo ? BANDS[0] : BANDS[BANDS.length - 1];
 }
 
+// One of the cheapest, most reliable ways to make an ordinary frame deeply
+// wrong: put an unnatural expression on a face in it. A fraction of channels
+// (more often at higher dread) carry one of these, woven into an otherwise
+// normal scene.
+const UNNATURAL_FACES: string[] = [
+  'one face wears a fixed, too-wide smile that never reaches the eyes',
+  'a figure in the background stares blankly straight into the lens, slack-jawed',
+  'someone is smiling with far too many teeth',
+  'a face is frozen mid-laugh, the eyes completely empty',
+  'one head is turned slightly too far, grinning at nothing in the corner',
+  'an onlooker’s eyes are open unnaturally wide and never blink',
+  'a smiling face whose eyes drift in two different directions',
+  'one person’s delight arrives a beat too late and a beat too eager',
+  'a face in the crowd is calm and fixed while everyone else reacts, watching the viewer',
+  'a smile curled the wrong way — a grimace pretending to be joy',
+  'a child’s face wearing a grown adult’s knowing expression',
+  'a painted-on performer’s smile while the real mouth underneath stays flat',
+  'one figure caught forever mid-blink, eyelids half down, mouth open',
+  'a face turned to camera with an expression that does not match the scene at all',
+  'someone holding eye contact with the lens a few seconds too long',
+];
+
+// Deterministic per freq: maybe pick an unnatural expression. Probability rises
+// with dread; cursed signals almost always have one. null = a clean face.
+function expressionFor(freq: number, dread: number, cursed: boolean): string | null {
+  const p = cursed ? 0.8 : 0.3 + dread * 0.35;
+  if (hashFreq(freq, 3) >= p) return null;
+  const idx = Math.floor(hashFreq(freq, 5) * UNNATURAL_FACES.length) % UNNATURAL_FACES.length;
+  return UNNATURAL_FACES[idx];
+}
+
 // Stable pseudo-random in [0,1) from a frequency + salt. Same inputs → same
 // value, so a frequency is always the same program and same cursed-or-not state.
 function hashFreq(freq: number, salt: number): number {
@@ -210,20 +241,23 @@ export type FreqDesc = {
   region: string;
   genre: string;
   look: string;
-  format: string;      // the specific program drawn for this freq
-  dread: number;       // effective dread (cursed → 1)
+  format: string;        // the specific program drawn for this freq
+  expression: string | null;  // an unnatural face woven into the scene, if any
+  dread: number;         // effective dread (cursed → 1)
   cursed: boolean;
 };
 
 export function describeFreq(freq: number): FreqDesc {
   const band = bandFor(freq);
   const cursed = cursedFor(freq);
+  const dread = cursed ? 1 : band.dread;
   return {
     region: band.region,
     genre: band.genre,
     look: band.look,
     format: formatFor(band, freq),
-    dread: cursed ? 1 : band.dread,
+    expression: expressionFor(freq, dread, cursed),
+    dread,
     cursed,
   };
 }
@@ -288,6 +322,10 @@ export function imageSuffixFor(desc: FreqDesc): string {
         'one detail that is off, a lonely unease you cannot name, a faint dread ' +
         'under a normal surface, an uncanny held stillness',
     );
+  }
+  // The single strongest cue: an unnatural expression on a face in the frame.
+  if (desc.expression) {
+    parts.push('IMPORTANT: a human face is visible and ' + desc.expression);
   }
   parts.push(NOT_GLITCH);
   parts.push(LOFI);

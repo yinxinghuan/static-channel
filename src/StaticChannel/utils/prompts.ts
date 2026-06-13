@@ -57,6 +57,12 @@ export function userPromptForFreq(freq: number, desc: FreqDesc): string {
     `Program airing on this exact frequency: ${desc.format}.`,
     `Dread: ${desc.dread.toFixed(2)} (${dreadLabel(desc.dread)}).`,
   ];
+  if (desc.expression) {
+    lines.push(
+      `Unnatural detail to weave in (subtle, matter-of-fact): if any person or face is on screen, ${desc.expression}. ` +
+        'Do not explain it; just let it be there.',
+    );
+  }
   if (desc.cursed) {
     lines.push(
       'OVERRIDE: this frequency is CURSED — the presence behind the malfunction breaks fully through this program. ' +
