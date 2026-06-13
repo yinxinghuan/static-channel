@@ -34,11 +34,36 @@ const W_CONTINUE = 2;   // someone else staying on the air is the heaviest signa
 
 interface RawRow {
   user_id: string;
-  user_name?: string;
-  user_avatar_url?: string;
-  head_url?: string;
   time?: string;
   resource_data: string;
+}
+
+// get/data/list does NOT carry the author's name or avatar — those must be
+// hydrated from the profile endpoint, one fetch per distinct author (cached
+// across refreshes). Same pattern every other wall game uses.
+interface UserInfo {
+  name?: string;
+  head_url?: string;
+}
+
+const PROFILE_CACHE = new Map<string, UserInfo>();
+
+async function fetchProfiles(ids: string[]): Promise<Map<string, UserInfo>> {
+  const missing = ids.filter(id => id && !PROFILE_CACHE.has(id));
+  await Promise.all(missing.map(async id => {
+    try {
+      const r = await callAigramAPI<AigramResponse<UserInfo>>(
+        `/note/telegram/user/get/info/by/telegram_id?telegram_id=${encodeURIComponent(id)}`,
+        'GET',
+      );
+      PROFILE_CACHE.set(id, { name: r?.data?.name, head_url: r?.data?.head_url });
+    } catch (_) {
+      PROFILE_CACHE.set(id, {});
+    }
+  }));
+  const out = new Map<string, UserInfo>();
+  for (const id of ids) out.set(id, PROFILE_CACHE.get(id) ?? {});
+  return out;
 }
 
 export function useWall(
@@ -75,6 +100,14 @@ export function useWall(
         'GET',
       );
       const rows: RawRow[] = Array.isArray(res?.data) ? res.data : [];
+
+      // Hydrate author name + avatar for every non-self row before building
+      // segments — the list rows themselves carry neither.
+      const authorIds = Array.from(new Set(
+        rows.map(r => r.user_id).filter(id => id && id !== telegramId),
+      ));
+      const profileMap = await fetchProfiles(authorIds);
+
       const all: SegmentWithAuthor[] = [];
       const otherReactions: Reaction[] = [];
       const keepers = new Map<string, Set<string>>();   // freqKey → user ids who kept it
@@ -91,9 +124,12 @@ export function useWall(
         } catch (_) {
           continue;
         }
+        const profile = profileMap.get(r.user_id);
+        const authorName = profile?.name || 'broadcaster';
+        const authorAvatarUrl = profile?.head_url || undefined;
         for (const s of payload.segments ?? []) {
           if (!s || typeof s.freq !== 'number' || !s.imageUrl) continue;
-          all.push(withAuthor(s, r.user_id, r.user_name || 'broadcaster', r.head_url || r.user_avatar_url || undefined));
+          all.push(withAuthor(s, r.user_id, authorName, authorAvatarUrl));
         }
         for (const rx of payload.reactions ?? []) otherReactions.push(rx);
         addKeepers(keepers, payload.bookmarks ?? [], r.user_id);
