@@ -73,6 +73,9 @@ export default function Wall({ open, onClose, onJump, broadcasts, bookmarks }: W
                   <div className="sc-wall__pic-scan" />
                   <div className="sc-wall__pic-vign" />
                   <span className="sc-wall__freq">{b.freq.toFixed(1)}</span>
+                  {b.videoUrl && (
+                    <span className="sc-wall__livepill" aria-label={t('live.badge')}>● {t('live.badge')}</span>
+                  )}
                   {b.segmentCount >= 2 && (
                     <span className="sc-wall__segpill" aria-label={segLabel}>•••{b.segmentCount}</span>
                   )}

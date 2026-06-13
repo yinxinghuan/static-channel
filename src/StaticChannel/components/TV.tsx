@@ -42,6 +42,7 @@ export type TVProps = {
   channelName?: string;
   subtitle?: string;
   imageUrl?: string;
+  videoUrl?: string;              // when the channel has gone live, the looping clip
   caption?: string;               // displayed under chyron when no signal / loading
   onPointerDown: (e: React.PointerEvent) => void;
   showHint: boolean;
@@ -55,7 +56,7 @@ export type TVProps = {
 const NO_DEFECTS: TVDefects = { roll: 0, tracking: 0, chroma: 0, dropout: 0, flicker: 0 };
 
 export default function TV({
-  freq, snappedFreq, snowLevel, channelName, subtitle, imageUrl, caption,
+  freq, snappedFreq, snowLevel, channelName, subtitle, imageUrl, videoUrl, caption,
   onPointerDown, showHint, hintText, segNav, defects = NO_DEFECTS,
 }: TVProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -109,7 +110,8 @@ export default function TV({
   const baseSnow = Math.max(0.04, Math.min(1, snowLevel));
   const snowAlpha = dropoutFlash ? Math.max(baseSnow, 0.82) : baseSnow;
 
-  const pictureUp = !!imageUrl && snowLevel < 0.45;
+  const pictureUp = (!!imageUrl || !!videoUrl) && snowLevel < 0.45;
+  const isLive = !!videoUrl && snowLevel < 0.45;
   const showSegUI = !!segNav && segNav.count >= 2 && snowLevel < 0.4;
 
   // Defect-driven CSS variables, only meaningful while a picture is up.
@@ -146,7 +148,18 @@ export default function TV({
           className={`sc-tv__screen ${flickerOn ? 'is-flicker' : ''}`}
           style={screenStyle}
         >
-          {imageUrl ? (
+          {videoUrl ? (
+            <video
+              className="sc-tv__pic sc-tv__vid"
+              src={videoUrl}
+              autoPlay
+              loop
+              muted
+              playsInline
+              draggable={false}
+              style={{ opacity: 1 - snowAlpha * 0.85 }}
+            />
+          ) : imageUrl ? (
             <>
               <img
                 className="sc-tv__pic"
@@ -192,6 +205,13 @@ export default function TV({
               <span className="sc-tv__call">{channelName}</span>
             )}
           </div>
+
+          {isLive && (
+            <div className="sc-tv__live" aria-label={t('live.badge')}>
+              <span className="sc-tv__live-dot" aria-hidden="true" />
+              {t('live.badge')}
+            </div>
+          )}
 
           {snowLevel < 0.4 && subtitle && (
             <div className="sc-tv__chyron sc-tv__chyron--bot">

@@ -19,17 +19,21 @@ import { useChannel } from './hooks/useChannel';
 import { useTuner } from './hooks/useTuner';
 import { useWall, unseenCount } from './hooks/useWall';
 import { useGameSave } from '@shared/save';
-import { telegramId, useGameEvent } from '@shared/runtime';
+import { isInAigram, telegramId, useGameEvent } from '@shared/runtime';
 import { installGlobalTapFeedback, isMuted, setMuted } from './utils/audio';
 import { describeFreq, signalDefects } from './utils/bands';
+import { videoMotionPrompt } from './utils/prompts';
+import { pollToCompletion, submitVideo } from './utils/videoApi';
 import { timeAgo } from './utils/timeAgo';
-import type { Bookmark, Channel, Reaction, SavePayload, Segment } from './types';
+import type { Bookmark, Broadcast, Channel, Promotion, Reaction, SavePayload, Segment } from './types';
 import { migrateSave, sameFreq, segKey, snapFreq } from './types';
 
 const GAME_ID = 'static-channel';
 const SEGMENT_CAP = 64;
 const BOOKMARK_CAP = 24;
 const REACTION_CAP = 96;
+const PROMOTION_CAP = 32;
+const PROMOTE_THRESHOLD = 5;   // weighted interactions before a channel goes live
 
 const NOTIFY_IMAGE_PROMPT = 'a corrupted late-night TV broadcast still';
 
@@ -47,11 +51,16 @@ type NotifyAction = {
   message: { template: string; variables: string[] };
 };
 
-function notifyAction(targetUserId: string, imageUrl: string | undefined, template: string): NotifyAction {
+function notifyAction(
+  targetUserId: string,
+  imageUrl: string | undefined,
+  template: string,
+  variables: string[] = ['sender_name'],
+): NotifyAction {
   const action: NotifyAction = {
     type: 'notify',
     target_user_id: targetUserId,
-    message: { template, variables: ['sender_name'] },
+    message: { template, variables },
   };
   if (imageUrl) action.image = { ref_url: imageUrl, prompt: NOTIFY_IMAGE_PROMPT };
   return action;
@@ -68,6 +77,7 @@ export default function StaticChannel() {
   const [segments, setSegments] = useState<Segment[]>([]);
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
   const [reactions, setReactions] = useState<Reaction[]>([]);
+  const [promotions, setPromotions] = useState<Promotion[]>([]);
   const hydratedRef = useRef(false);
   useEffect(() => {
     if (hydratedRef.current) return;
@@ -77,22 +87,24 @@ export default function StaticChannel() {
     setSegments((migrated.segments ?? []).slice(0, SEGMENT_CAP));
     setBookmarks((migrated.bookmarks ?? []).slice(0, BOOKMARK_CAP));
     setReactions((migrated.reactions ?? []).slice(0, REACTION_CAP));
+    setPromotions((migrated.promotions ?? []).slice(0, PROMOTION_CAP));
   }, [save.savedData]);
 
   // Single persist entry point — merges a partial update over current state and
   // writes the whole payload through (savedData never echoes writes back).
-  const stateRef = useRef({ segments, bookmarks, reactions });
-  stateRef.current = { segments, bookmarks, reactions };
+  const stateRef = useRef({ segments, bookmarks, reactions, promotions });
+  stateRef.current = { segments, bookmarks, reactions, promotions };
   const persist = useCallback((next: Partial<SavePayload>) => {
     const merged = { ...stateRef.current, ...next };
     setSegments(merged.segments);
     setBookmarks(merged.bookmarks);
     setReactions(merged.reactions);
+    setPromotions(merged.promotions);
     save.persist(merged);
   }, [save]);
 
-  // Cross-user wall + ticker + reaction tallies.
-  const wall = useWall(segments, reactions);
+  // Cross-user wall + ticker + reaction tallies + Going-Live scores.
+  const wall = useWall(segments, reactions, bookmarks, promotions);
   const [wallOpen, setWallOpen] = useState(false);
 
   // Tuner.
@@ -180,6 +192,77 @@ export default function StaticChannel() {
     setActiveSegmentIdx(idx);
     wasOnLatestRef.current = (idx === segmentCount - 1);
   }, [segmentCount]);
+
+  // Once a channel is live, the clip IS the channel — show it whenever tuned in.
+  const activeVideoUrl = activeBroadcast?.videoUrl;
+
+  // ─── GOING LIVE (still → clip, baked in the background) ──────────────────
+  // When a channel crosses the interaction threshold, some client submits a
+  // video task (instant) and polls it to completion in the background — the
+  // user never waits. The task_id is resumable, so any client (the author when
+  // they return, or any viewer) can finish a pending bake. First success wins
+  // and the channel is live for everyone; the anchor author gets pinged.
+  const workingRef = useRef<Set<string>>(new Set());
+  const wallRefreshRef = useRef(wall.refresh);
+  wallRefreshRef.current = wall.refresh;
+
+  const finishPromotion = useCallback(async (b: Broadcast, taskId: string) => {
+    const key = segKey(b.freq, b.anchor.ts);
+    try {
+      const url = await pollToCompletion(taskId);
+      const rec: Promotion = { freq: b.freq, segTs: b.anchor.ts, taskId, videoUrl: url, status: 'success', ts: Date.now() };
+      persist({ promotions: [rec, ...stateRef.current.promotions.filter(p => segKey(p.freq, p.segTs) !== key)].slice(0, PROMOTION_CAP) });
+      wallRefreshRef.current();
+      const author = b.anchor.authorId;
+      if (author && author !== myId && author !== 'me') {
+        events.trigger(`live:${b.freq.toFixed(1)}`, {
+          actions: [notifyAction(author, b.anchor.imageUrl, t('notify.live', { f: b.freq.toFixed(1) }), [])],
+        });
+      }
+    } catch (_) {
+      // failed / timed out — leave the session lock so we don't hot-loop; a
+      // later client (or session) can retry from the persisted state.
+    }
+  }, [persist, events, myId]);
+
+  const maybePromote = useCallback((b: Broadcast | undefined) => {
+    if (!isInAigram || !b || b.videoUrl) return;
+    const key = segKey(b.freq, b.anchor.ts);
+    if (workingRef.current.has(key)) return;
+    const promo = b.promotion;
+    if (promo?.status === 'success') return;
+    if (promo?.status === 'processing') {
+      workingRef.current.add(key);
+      finishPromotion(b, promo.taskId);
+      return;
+    }
+    // No promotion yet (or a prior one failed) and the channel earned it.
+    if (b.liveScore >= PROMOTE_THRESHOLD) {
+      workingRef.current.add(key);
+      (async () => {
+        const desc = describeFreq(b.freq);
+        let taskId: string;
+        try {
+          taskId = await submitVideo({
+            image_url: b.anchor.imageUrl,
+            end_image_url: b.anchor.imageUrl,
+            prompt: videoMotionPrompt(desc),
+          });
+        } catch (_) {
+          return;   // submit failed; stay locked this session
+        }
+        const rec: Promotion = { freq: b.freq, segTs: b.anchor.ts, taskId, status: 'processing', ts: Date.now() };
+        persist({ promotions: [rec, ...stateRef.current.promotions.filter(p => segKey(p.freq, p.segTs) !== key)].slice(0, PROMOTION_CAP) });
+        finishPromotion(b, taskId);
+      })();
+    }
+  }, [finishPromotion, persist]);
+
+  // Kick the engine whenever the channel we're settled on changes.
+  useEffect(() => {
+    if (tuner.state.isDragging || tuner.state.isSettling) return;
+    maybePromote(activeBroadcast);
+  }, [activeBroadcast, tuner.state.isDragging, tuner.state.isSettling, maybePromote]);
 
   // When the user lands on a bookmarked freq, advance the lastSeenTs so the
   // red dot clears.
@@ -431,6 +514,7 @@ export default function StaticChannel() {
         channelName={activeChannel?.channelName}
         subtitle={activeChannel?.subtitle}
         imageUrl={activeChannel?.imageUrl}
+        videoUrl={activeVideoUrl}
         caption={activeChannel ? undefined : caption}
         onPointerDown={tuner.handlers.onPointerDown}
         showHint={hintVisible && !activeChannel}

@@ -121,6 +121,19 @@ export function userPromptForExtend(args: {
   return lines.join('\n');
 }
 
+// When a channel "goes live", its still is animated with ONE small, slow,
+// wrong movement (FMV rule: 5 seconds = a single beat, never a whole scene).
+// The payoff: the thing you kept staring at was always about to move.
+export function videoMotionPrompt(desc: FreqDesc): string {
+  const beat = desc.expression
+    ? 'the face with the unnatural expression slowly turns a few degrees toward the camera and holds'
+    : 'a figure who was still slowly turns to face the camera, or its eyes open; otherwise nothing moves';
+  return (
+    `${beat}. One single small, slow, deliberate movement only — the rest of the frame stays perfectly still. ` +
+    `Subtle, eerie, wrong, patient; ${desc.look}; degraded vintage footage, no text, no captions.`
+  );
+}
+
 export function parseExtendJSON(raw: string): { subtitle: string; imagePrompt: string } | null {
   const cleaned = raw.replace(/```json|```/gi, '').trim();
   const start = cleaned.indexOf('{');

@@ -22,6 +22,7 @@ export type SegmentWithAuthor = Segment & {
   authorId: string;
   authorName: string;
   authorAvatarUrl?: string;
+  videoUrl?: string;     // set when this segment has been promoted to a clip
 };
 
 // Derived view: all segments at a freq, in chronological order.
@@ -33,6 +34,9 @@ export type Broadcast = {
   latest: SegmentWithAuthor;
   segmentCount: number;
   lastTs: number;
+  liveScore: number;     // weighted cross-user interaction score (drives Going Live)
+  videoUrl?: string;     // the anchor's promoted clip, once baked
+  promotion?: Promotion; // merged best promotion record for the anchor, if any
 };
 
 // Legacy wall-row shape (kept for places not yet migrated).
@@ -55,11 +59,25 @@ export type Reaction = {
   ts: number;            // when the reaction was left
 };
 
+// A channel that drew enough interaction gets promoted from a still to a short
+// looping clip. The bake runs server-side (task_id) and is resumable from any
+// client; whoever publishes a successful Promotion makes the channel "live" for
+// everyone. (freq, segTs) targets the promoted segment (the anchor still).
+export type Promotion = {
+  freq: number;
+  segTs: number;
+  taskId: string;
+  videoUrl?: string;     // set once the bake succeeds
+  status: 'processing' | 'success' | 'failed';
+  ts: number;
+};
+
 // New persisted shape per user.
 export type SavePayload = {
   segments?: Segment[];
   bookmarks?: Bookmark[];
   reactions?: Reaction[];
+  promotions?: Promotion[];
 };
 
 // Old persisted shape — read-only migration only.
@@ -72,12 +90,14 @@ export type LegacySavePayload = {
 export function migrateSave(raw: unknown): SavePayload {
   const r = (raw ?? {}) as SavePayload & LegacySavePayload;
   const reactions: Reaction[] = Array.isArray(r.reactions) ? r.reactions.filter(isValidReaction) : [];
+  const promotions: Promotion[] = Array.isArray(r.promotions) ? r.promotions.filter(isValidPromotion) : [];
   const segs: Segment[] = Array.isArray(r.segments) ? r.segments.filter(isValidSegment) : [];
   if (segs.length > 0) {
     return {
       segments: segs,
       bookmarks: Array.isArray(r.bookmarks) ? r.bookmarks.filter(isValidBookmark) : [],
       reactions,
+      promotions,
     };
   }
   const legacy: Segment[] = Array.isArray(r.channels)
@@ -95,6 +115,7 @@ export function migrateSave(raw: unknown): SavePayload {
     segments: legacy,
     bookmarks: legacy.map(s => ({ freq: s.freq, lastSeenTs: s.ts })),
     reactions,
+    promotions,
   };
 }
 
@@ -120,6 +141,18 @@ function isValidReaction(r: unknown): r is Reaction {
   if (!r || typeof r !== 'object') return false;
   const x = r as Reaction;
   return typeof x.freq === 'number' && typeof x.segTs === 'number' && typeof x.ts === 'number';
+}
+
+function isValidPromotion(p: unknown): p is Promotion {
+  if (!p || typeof p !== 'object') return false;
+  const x = p as Promotion;
+  return (
+    typeof x.freq === 'number' &&
+    typeof x.segTs === 'number' &&
+    typeof x.taskId === 'string' &&
+    (x.status === 'processing' || x.status === 'success' || x.status === 'failed') &&
+    typeof x.ts === 'number'
+  );
 }
 
 // Identity key for a segment / reaction target: "97.3:1700000000000".

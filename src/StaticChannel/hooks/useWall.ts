@@ -16,6 +16,7 @@ import { getGameUuid } from '@shared/runtime';
 import type {
   Bookmark,
   Broadcast,
+  Promotion,
   Reaction,
   Segment,
   SegmentWithAuthor,
@@ -26,6 +27,11 @@ import { freqKey, migrateSave, sameFreq, segKey } from '../types';
 // whether the current user is one of them.
 export type ReactionTally = { count: number; mine: boolean };
 
+// Weighted interaction score that tips a channel into "Going Live".
+const W_KEEP = 1;
+const W_LISTEN = 1;
+const W_CONTINUE = 2;   // someone else staying on the air is the heaviest signal
+
 interface RawRow {
   user_id: string;
   user_name?: string;
@@ -35,17 +41,31 @@ interface RawRow {
   resource_data: string;
 }
 
-export function useWall(mySegments: Segment[], myReactions: Reaction[]) {
+export function useWall(
+  mySegments: Segment[],
+  myReactions: Reaction[],
+  myBookmarks: Bookmark[],
+  myPromotions: Promotion[],
+) {
   const [broadcasts, setBroadcasts] = useState<Broadcast[]>([]);
   const [recent, setRecent] = useState<SegmentWithAuthor[]>([]);
   const [reactionTally, setReactionTally] = useState<Map<string, ReactionTally>>(new Map());
   const [loaded, setLoaded] = useState(false);
 
   const refresh = useCallback(async () => {
+    const myId = telegramId ?? 'me';
     const sessionId = getGameUuid();
     if (!isInAigram || !sessionId) {
-      // Offline / preview — still surface our own reactions locally.
-      setReactionTally(tallyReactions([], myReactions));
+      // Offline / preview — still surface our own data locally.
+      const tally = tallyReactions([], myReactions);
+      setReactionTally(tally);
+      const all = mySegments.map(s => withAuthor(s, myId, 'YOU'));
+      const keepers = new Map<string, Set<string>>();
+      addKeepers(keepers, myBookmarks, myId);
+      const promos = new Map<string, Promotion>();
+      addPromos(promos, myPromotions);
+      setBroadcasts(buildBroadcasts(all, tally, keepers, promos));
+      setRecent(buildRecent(all));
       setLoaded(true);
       return;
     }
@@ -57,6 +77,8 @@ export function useWall(mySegments: Segment[], myReactions: Reaction[]) {
       const rows: RawRow[] = Array.isArray(res?.data) ? res.data : [];
       const all: SegmentWithAuthor[] = [];
       const otherReactions: Reaction[] = [];
+      const keepers = new Map<string, Set<string>>();   // freqKey → user ids who kept it
+      const promos = new Map<string, Promotion>();       // segKey → best promotion
       for (const r of rows) {
         if (!r.resource_data) continue;
         const isSelf = r.user_id === telegramId;
@@ -69,44 +91,61 @@ export function useWall(mySegments: Segment[], myReactions: Reaction[]) {
         } catch (_) {
           continue;
         }
-        const list = payload.segments ?? [];
-        for (const s of list) {
+        for (const s of payload.segments ?? []) {
           if (!s || typeof s.freq !== 'number' || !s.imageUrl) continue;
-          all.push({
-            ...s,
-            authorId: r.user_id,
-            authorName: r.user_name || 'broadcaster',
-            authorAvatarUrl: r.head_url || r.user_avatar_url || undefined,
-          });
+          all.push(withAuthor(s, r.user_id, r.user_name || 'broadcaster', r.head_url || r.user_avatar_url || undefined));
         }
         for (const rx of payload.reactions ?? []) otherReactions.push(rx);
+        addKeepers(keepers, payload.bookmarks ?? [], r.user_id);
+        addPromos(promos, payload.promotions ?? []);
       }
-      // Splice in our own authored segments so they appear instantly.
-      for (const s of mySegments) {
-        all.push({
-          ...s,
-          authorId: telegramId ?? 'me',
-          authorName: 'YOU',  // resolved in UI; the wall hides the name for self anyway
-          authorAvatarUrl: undefined,
-        });
-      }
-      const grouped = groupByFreq(all);
-      setBroadcasts(grouped);
+      // Splice in our own data so it counts + appears instantly.
+      for (const s of mySegments) all.push(withAuthor(s, myId, 'YOU'));
+      addKeepers(keepers, myBookmarks, myId);
+      addPromos(promos, myPromotions);
+
+      const tally = tallyReactions(otherReactions, myReactions);
+      setReactionTally(tally);
+      setBroadcasts(buildBroadcasts(all, tally, keepers, promos));
       setRecent(buildRecent(all));
-      setReactionTally(tallyReactions(otherReactions, myReactions));
     } catch (_) {
       // network / bridge — keep stale data
     } finally {
       setLoaded(true);
     }
-  // mySegments / myReactions are intentionally captured by reference each
-  // refresh; deps include them so callers get a fresh closure when they change.
+  // Inputs captured by reference each refresh; deps include them so callers get
+  // a fresh closure when their content (and thus identity) changes.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mySegments, myReactions]);
+  }, [mySegments, myReactions, myBookmarks, myPromotions]);
 
   useEffect(() => { refresh(); }, [refresh]);
 
   return { broadcasts, recent, reactionTally, loaded, refresh };
+}
+
+function withAuthor(s: Segment, authorId: string, authorName: string, authorAvatarUrl?: string): SegmentWithAuthor {
+  return { ...s, authorId, authorName, authorAvatarUrl };
+}
+
+function addKeepers(map: Map<string, Set<string>>, bookmarks: Bookmark[], userId: string) {
+  for (const b of bookmarks) {
+    if (!b || typeof b.freq !== 'number') continue;
+    const k = freqKey(b.freq);
+    const set = map.get(k) ?? new Set<string>();
+    set.add(userId);
+    map.set(k, set);
+  }
+}
+
+const promoRank = (s: Promotion['status']) => (s === 'success' ? 2 : s === 'processing' ? 1 : 0);
+function addPromos(map: Map<string, Promotion>, promotions: Promotion[]) {
+  for (const p of promotions) {
+    const k = segKey(p.freq, p.segTs);
+    const cur = map.get(k);
+    if (!cur || promoRank(p.status) > promoRank(cur.status) || (promoRank(p.status) === promoRank(cur.status) && p.ts > cur.ts)) {
+      map.set(k, p);
+    }
+  }
 }
 
 function tallyReactions(others: Reaction[], mine: Reaction[]): Map<string, ReactionTally> {
@@ -126,7 +165,12 @@ function tallyReactions(others: Reaction[], mine: Reaction[]): Map<string, React
   return map;
 }
 
-function groupByFreq(all: SegmentWithAuthor[]): Broadcast[] {
+function buildBroadcasts(
+  all: SegmentWithAuthor[],
+  tally: Map<string, ReactionTally>,
+  keepers: Map<string, Set<string>>,
+  promos: Map<string, Promotion>,
+): Broadcast[] {
   const buckets = new Map<string, SegmentWithAuthor[]>();
   for (const s of all) {
     const k = freqKey(s.freq);
@@ -139,6 +183,21 @@ function groupByFreq(all: SegmentWithAuthor[]): Broadcast[] {
     arr.sort((a, b) => a.ts - b.ts);   // oldest → newest
     const anchor = arr[0];
     const latest = arr[arr.length - 1];
+
+    // Going Live score — author-agnostic property of the channel.
+    const keeperSet = keepers.get(freqKey(anchor.freq));
+    let keeps = keeperSet ? keeperSet.size : 0;
+    if (keeperSet && keeperSet.has(anchor.authorId)) keeps -= 1;   // the author keeping their own doesn't count
+    let listens = 0;
+    for (const s of arr) listens += tally.get(segKey(s.freq, s.ts))?.count ?? 0;
+    const continues = arr.filter(s => s.authorId !== anchor.authorId).length;
+    const liveScore = Math.max(0, keeps) * W_KEEP + listens * W_LISTEN + continues * W_CONTINUE;
+
+    // Promotion (anchor still → clip).
+    const promo = promos.get(segKey(anchor.freq, anchor.ts));
+    const videoUrl = promo?.status === 'success' ? promo.videoUrl : undefined;
+    if (videoUrl) anchor.videoUrl = videoUrl;   // anchor === arr[0], mutated in place
+
     out.push({
       freq: anchor.freq,
       channelName: anchor.channelName,
@@ -147,6 +206,9 @@ function groupByFreq(all: SegmentWithAuthor[]): Broadcast[] {
       latest,
       segmentCount: arr.length,
       lastTs: latest.ts,
+      liveScore,
+      videoUrl,
+      promotion: promo,
     });
   }
   out.sort((a, b) => b.lastTs - a.lastTs);
