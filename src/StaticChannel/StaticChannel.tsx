@@ -1,8 +1,10 @@
-// Static Channel — late-night radio dial across an AI-broadcast FM band.
-// Drag the screen (or the dial below) to tune. When you land on a freq, the
-// signal is generated (if new) or replayed (if someone else has already been
-// here). KEEP saves it to your bookmarks; STAY ON AIR adds your own next
-// segment, turning the freq into a thread other listeners can dial into.
+// Static Channel — late-night radio dial across an AI-broadcast FM band that is
+// also a TIMELINE of media (silent film → westerns → early TV → VHS → dead-hours
+// → the digital feed), all corrupted by something with intent. Drag the screen
+// (or the dial below) to tune. KEEP saves a channel; STAY ON AIR appends your own
+// next segment, turning the freq into a thread others can dial into; tap LISTEN
+// to leave an "I'm listening" mark on whatever segment is on screen. Every social
+// act pings the author via a platform notification.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import './StaticChannel.less';
@@ -17,15 +19,19 @@ import { useChannel } from './hooks/useChannel';
 import { useTuner } from './hooks/useTuner';
 import { useWall, unseenCount } from './hooks/useWall';
 import { useGameSave } from '@shared/save';
-import { telegramId } from '@shared/runtime';
+import { telegramId, useGameEvent } from '@shared/runtime';
 import { installGlobalTapFeedback, isMuted, setMuted } from './utils/audio';
+import { describeFreq, signalDefects } from './utils/bands';
 import { timeAgo } from './utils/timeAgo';
-import type { Bookmark, Channel, SavePayload, Segment } from './types';
-import { migrateSave, sameFreq, snapFreq } from './types';
+import type { Bookmark, Channel, Reaction, SavePayload, Segment } from './types';
+import { migrateSave, sameFreq, segKey, snapFreq } from './types';
 
 const GAME_ID = 'static-channel';
 const SEGMENT_CAP = 64;
 const BOOKMARK_CAP = 24;
+const REACTION_CAP = 96;
+
+const NOTIFY_IMAGE_PROMPT = 'a corrupted late-night TV broadcast still';
 
 function pickInitialFreq(): number {
   const params = new URLSearchParams(window.location.search);
@@ -34,14 +40,34 @@ function pickInitialFreq(): number {
   return snapFreq(88 + Math.random() * 20);
 }
 
+type NotifyAction = {
+  type: 'notify';
+  target_user_id: string;
+  image?: { ref_url: string; prompt: string };
+  message: { template: string; variables: string[] };
+};
+
+function notifyAction(targetUserId: string, imageUrl: string | undefined, template: string): NotifyAction {
+  const action: NotifyAction = {
+    type: 'notify',
+    target_user_id: targetUserId,
+    message: { template, variables: ['sender_name'] },
+  };
+  if (imageUrl) action.image = { ref_url: imageUrl, prompt: NOTIFY_IMAGE_PROMPT };
+  return action;
+}
+
 export default function StaticChannel() {
   const cache = useChannelCache();
   const channelGen = useChannel();
+  const events = useGameEvent();
+  const myId = telegramId ?? 'me';
 
   // Persisted state — mirror pattern (read once on mount, write through persist).
   const save = useGameSave<SavePayload>(GAME_ID);
   const [segments, setSegments] = useState<Segment[]>([]);
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
+  const [reactions, setReactions] = useState<Reaction[]>([]);
   const hydratedRef = useRef(false);
   useEffect(() => {
     if (hydratedRef.current) return;
@@ -50,16 +76,23 @@ export default function StaticChannel() {
     const migrated = migrateSave(save.savedData);
     setSegments((migrated.segments ?? []).slice(0, SEGMENT_CAP));
     setBookmarks((migrated.bookmarks ?? []).slice(0, BOOKMARK_CAP));
+    setReactions((migrated.reactions ?? []).slice(0, REACTION_CAP));
   }, [save.savedData]);
 
-  const persist = useCallback((nextSegs: Segment[], nextBookmarks: Bookmark[]) => {
-    setSegments(nextSegs);
-    setBookmarks(nextBookmarks);
-    save.persist({ segments: nextSegs, bookmarks: nextBookmarks });
+  // Single persist entry point — merges a partial update over current state and
+  // writes the whole payload through (savedData never echoes writes back).
+  const stateRef = useRef({ segments, bookmarks, reactions });
+  stateRef.current = { segments, bookmarks, reactions };
+  const persist = useCallback((next: Partial<SavePayload>) => {
+    const merged = { ...stateRef.current, ...next };
+    setSegments(merged.segments);
+    setBookmarks(merged.bookmarks);
+    setReactions(merged.reactions);
+    save.persist(merged);
   }, [save]);
 
-  // Cross-user wall + ticker.
-  const wall = useWall(segments);
+  // Cross-user wall + ticker + reaction tallies.
+  const wall = useWall(segments, reactions);
   const [wallOpen, setWallOpen] = useState(false);
 
   // Tuner.
@@ -97,11 +130,11 @@ export default function StaticChannel() {
     [wall.broadcasts, snapped],
   );
 
-  // ─── Segment navigation (Feature 1: history timeline) ────────────────
-  // Default to the latest segment. Tracks "was on latest" so when a new
-  // segment arrives at the freq the user is currently viewing, we follow
-  // forward if they were on the previous latest, but stay put if they had
-  // deliberately tapped back to an older segment.
+  // The dial's geography for the current spot — drives the analog defects.
+  const desc = useMemo(() => describeFreq(snapped), [snapped]);
+  const defects = useMemo(() => signalDefects(desc.dread, desc.cursed), [desc.dread, desc.cursed]);
+
+  // ─── Segment navigation (history timeline) ──────────────────────────────
   const [activeSegmentIdx, setActiveSegmentIdx] = useState(0);
   const wasOnLatestRef = useRef(true);
   const prevFreqRef = useRef(snapped);
@@ -110,7 +143,6 @@ export default function StaticChannel() {
 
   useEffect(() => {
     if (prevFreqRef.current !== snapped) {
-      // Freq changed → default to latest.
       prevFreqRef.current = snapped;
       prevCountRef.current = segmentCount;
       wasOnLatestRef.current = true;
@@ -118,7 +150,6 @@ export default function StaticChannel() {
       return;
     }
     if (prevCountRef.current !== segmentCount) {
-      // Same freq, count changed (someone — possibly us — added a segment).
       if (wasOnLatestRef.current) {
         setActiveSegmentIdx(Math.max(0, segmentCount - 1));
       } else {
@@ -161,8 +192,8 @@ export default function StaticChannel() {
     if (bookmarks[idx].lastSeenTs >= latestTs) return;
     const next = [...bookmarks];
     next[idx] = { freq: snapped, lastSeenTs: latestTs };
-    persist(segments, next);
-  }, [activeBroadcast, snapped, tuner.state.isDragging, tuner.state.isSettling, bookmarks, segments, persist]);
+    persist({ bookmarks: next });
+  }, [activeBroadcast, snapped, tuner.state.isDragging, tuner.state.isSettling, bookmarks, persist]);
 
   const snowLevel = useMemo(() => {
     if (tuner.state.isDragging || tuner.state.isSettling) return 1;
@@ -214,10 +245,21 @@ export default function StaticChannel() {
       };
       nextSegs = [seg, ...segments.filter(s => !sameFreq(s.freq, snapped) || s.ts !== seg.ts)].slice(0, SEGMENT_CAP);
     }
-    persist(nextSegs, nextBookmarks);
-    // Refresh wall so the ticker / wall picks up our publish if it was an anchor.
-    if (!activeBroadcast) wall.refresh();
-  }, [activeBroadcast, activeChannel, alreadyKept, bookmarks, persist, segments, snapped, wall]);
+    persist({ segments: nextSegs, bookmarks: nextBookmarks });
+
+    // Notify the channel's anchor author that someone kept their station.
+    if (activeBroadcast) {
+      const anchorId = activeBroadcast.anchor.authorId;
+      if (anchorId && anchorId !== myId && anchorId !== 'me') {
+        events.trigger(`keep:${snapped.toFixed(1)}`, {
+          actions: [notifyAction(anchorId, activeChannel.imageUrl, t('notify.keep', { f: snapped.toFixed(1) }))],
+        });
+      }
+    } else {
+      // We just published the anchor — refresh so the ticker/wall pick it up.
+      wall.refresh();
+    }
+  }, [activeBroadcast, activeChannel, alreadyKept, bookmarks, persist, segments, snapped, wall, events, myId]);
 
   // ─── STAY ON AIR ──────────────────────────────────────────────────────
   const canStay = !!activeBroadcast && channelGen.status.phase !== 'extending' && channelGen.status.phase !== 'meta' && channelGen.status.phase !== 'image';
@@ -225,9 +267,12 @@ export default function StaticChannel() {
 
   const handleStayOnAir = useCallback(async (nudge: string) => {
     if (!activeBroadcast) return;
-    // Extend from whichever segment the user is currently watching — feels
-    // natural to "continue from here" rather than always from the freq's latest.
     const priorSubtitle = activeSegment?.subtitle ?? activeBroadcast.latest.subtitle;
+    // Targets to ping: the channel's anchor author + the author of the segment
+    // we are continuing from. Dedup, skip ourselves.
+    const targets = Array.from(new Set([activeBroadcast.anchor.authorId, activeSegment?.authorId]))
+      .filter((id): id is string => !!id && id !== myId && id !== 'me');
+
     const seg = await channelGen.extendChannel({
       freq: activeBroadcast.freq,
       channelName: activeBroadcast.channelName,
@@ -235,19 +280,55 @@ export default function StaticChannel() {
       nudge,
     });
     if (!seg) return;
-    // Mirror update: append our authored segment + bookmark (we just added to it).
     const nextSegs = [seg, ...segments].slice(0, SEGMENT_CAP);
     const nextBookmarks: Bookmark[] = [
       { freq: seg.freq, lastSeenTs: seg.ts },
       ...bookmarks.filter(b => !sameFreq(b.freq, seg.freq)),
     ].slice(0, BOOKMARK_CAP);
-    // Surface our new segment immediately on the TV via the cache.
     cache.set({ freq: seg.freq, channelName: seg.channelName, subtitle: seg.subtitle, imageUrl: seg.imageUrl });
-    // After publishing, jump to the new latest so the user sees what they made.
     wasOnLatestRef.current = true;
-    persist(nextSegs, nextBookmarks);
+    persist({ segments: nextSegs, bookmarks: nextBookmarks });
     wall.refresh();
-  }, [activeBroadcast, activeSegment, bookmarks, cache, channelGen, persist, segments, wall]);
+
+    if (targets.length) {
+      events.trigger(`continue:${seg.freq.toFixed(1)}`, {
+        actions: targets.map(id => notifyAction(id, seg.imageUrl, t('notify.continue', { f: seg.freq.toFixed(1) }))),
+      });
+    }
+  }, [activeBroadcast, activeSegment, bookmarks, cache, channelGen, persist, segments, wall, events, myId]);
+
+  // ─── I'M LISTENING (lightweight per-segment reaction) ───────────────────
+  const activeSegKey = activeSegment ? segKey(activeSegment.freq, activeSegment.ts) : '';
+  const activeReacted = useMemo(
+    () => !!activeSegKey && reactions.some(r => segKey(r.freq, r.segTs) === activeSegKey),
+    [activeSegKey, reactions],
+  );
+  const listenCount = useMemo(() => {
+    if (!activeSegKey) return 0;
+    const tally = wall.reactionTally.get(activeSegKey);
+    const others = tally ? tally.count - (tally.mine ? 1 : 0) : 0;
+    return others + (activeReacted ? 1 : 0);
+  }, [activeSegKey, wall.reactionTally, activeReacted]);
+  const canListen = !!activeSegment && !tuner.state.isDragging && !tuner.state.isSettling;
+
+  const handleListen = useCallback(() => {
+    if (!activeSegment) return;
+    const key = segKey(activeSegment.freq, activeSegment.ts);
+    if (reactions.some(r => segKey(r.freq, r.segTs) === key)) {
+      // toggle off — silent (no un-notify)
+      persist({ reactions: reactions.filter(r => segKey(r.freq, r.segTs) !== key) });
+      return;
+    }
+    const rx: Reaction = { freq: activeSegment.freq, segTs: activeSegment.ts, ts: Date.now() };
+    persist({ reactions: [rx, ...reactions].slice(0, REACTION_CAP) });
+
+    const target = activeSegment.authorId;
+    if (target && target !== myId && target !== 'me' && activeSegment.imageUrl) {
+      events.trigger(`listen:${key}`, {
+        actions: [notifyAction(target, activeSegment.imageUrl, t('notify.listen', { f: activeSegment.freq.toFixed(1) }))],
+      });
+    }
+  }, [activeSegment, reactions, persist, events, myId]);
 
   // ─── Wall jump ────────────────────────────────────────────────────────
   const handleJump = useCallback((freq: number) => {
@@ -260,9 +341,6 @@ export default function StaticChannel() {
         imageUrl: wallHit.latest.imageUrl,
       });
     }
-    // Arriving at a freq from the wall — always land on the latest segment.
-    // (The freq-change effect will run on tuner.jumpTo + reset idx, but we
-    // explicitly mark wasOnLatest so the user follows new segments forward.)
     wasOnLatestRef.current = true;
     tuner.jumpTo(freq);
     setWallOpen(false);
@@ -281,12 +359,28 @@ export default function StaticChannel() {
 
   // Ticker data.
   const tickerLatest = useMemo(() => {
-    const myId = telegramId ?? 'me';
     return wall.recent.find(s => s.authorId !== myId);
-  }, [wall.recent]);
+  }, [wall.recent, myId]);
   const unseen = useMemo(() => unseenCount(wall.broadcasts, bookmarks), [wall.broadcasts, bookmarks]);
 
-  // Segment nav (Feature 1: history timeline).
+  // "Your signal reached someone" — a freq where I have a segment AND someone
+  // else added a newer one. The in-game payoff of the notification.
+  const tuneBack = useMemo(() => {
+    let best: { freq: number; ts: number } | null = null;
+    for (const b of wall.broadcasts) {
+      const mine = b.segments.filter(s => s.authorId === myId);
+      if (!mine.length) continue;
+      const myLatest = Math.max(...mine.map(s => s.ts));
+      const newer = b.segments.filter(s => s.authorId !== myId && s.ts > myLatest);
+      if (!newer.length) continue;
+      const ts = Math.max(...newer.map(s => s.ts));
+      if (!best || ts > best.ts) best = { freq: b.freq, ts };
+    }
+    return best;
+  }, [wall.broadcasts, myId]);
+  const showTuneBack = !!tuneBack && !sameFreq(tuneBack.freq, snapped) && !tuner.state.isDragging && !tuner.state.isSettling;
+
+  // Segment nav.
   const segNav = useMemo(() => {
     if (!activeBroadcast || activeBroadcast.segmentCount < 2 || !activeSegment) return undefined;
     return {
@@ -320,6 +414,16 @@ export default function StaticChannel() {
         <TopTicker latest={tickerLatest} unseen={unseen} onOpen={openWall} />
       </div>
 
+      {showTuneBack && tuneBack && (
+        <div className="sc-tuneback-wrap">
+          <button className="sc-tuneback" onClick={() => handleJump(tuneBack.freq)}>
+            <span className="sc-tuneback__dot" aria-hidden="true">◉</span>
+            <span className="sc-tuneback__text">{t('tuneback.label', { f: tuneBack.freq.toFixed(1) })}</span>
+            <span className="sc-tuneback__arrow" aria-hidden="true">→</span>
+          </button>
+        </div>
+      )}
+
       <TV
         freq={tuner.state.freq}
         snappedFreq={tuner.state.snapped}
@@ -332,6 +436,7 @@ export default function StaticChannel() {
         showHint={hintVisible && !activeChannel}
         hintText={t('hint.drag')}
         segNav={segNav}
+        defects={defects}
       />
 
       <Dial
@@ -354,6 +459,15 @@ export default function StaticChannel() {
         >
           <span className="sc-keep__heart" aria-hidden="true">{alreadyKept ? '♥' : '♡'}</span>
           <span>{alreadyKept ? t('save.saved') : t('save.keep')}</span>
+        </button>
+        <button
+          className={`sc-listen ${activeReacted ? 'is-on' : ''}`}
+          onClick={handleListen}
+          disabled={!canListen}
+          aria-label={t('listen.label')}
+        >
+          <span className="sc-listen__eye" aria-hidden="true">{activeReacted ? '◉' : '◯'}</span>
+          <span>{activeReacted ? t('listen.on') : t('listen.label')}{listenCount > 0 ? ` · ${listenCount}` : ''}</span>
         </button>
       </div>
 

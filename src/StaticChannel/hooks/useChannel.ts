@@ -17,6 +17,7 @@ import {
   userPromptForExtend,
   userPromptForFreq,
 } from '../utils/prompts';
+import { describeFreq } from '../utils/bands';
 import type { Channel, Segment } from '../types';
 import { snapFreq } from '../types';
 
@@ -40,9 +41,10 @@ export function useChannel() {
       const freq = snapFreq(rawFreq);
       if (inFlightRef.current === freq) return null;
       inFlightRef.current = freq;
+      const desc = describeFreq(freq);
       setStatus({ phase: 'meta', freq });
       try {
-        const reply = await chat.send(userPromptForFreq(freq));
+        const reply = await chat.send(userPromptForFreq(freq, desc));
         if (inFlightRef.current !== freq) return null;
         const parsed = parseChannelJSON(reply);
         if (!parsed) {
@@ -53,7 +55,7 @@ export function useChannel() {
         setStatus({ phase: 'image', freq, subtitle, channelName });
         const imageUrl = await genImageWithRetry(
           genImg,
-          { prompt: buildImagePrompt(imagePrompt) },
+          { prompt: buildImagePrompt(imagePrompt, desc) },
           (info) => {
             if (inFlightRef.current !== freq) return;
             if (info.retrying) {
@@ -85,10 +87,11 @@ export function useChannel() {
       const freq = snapFreq(args.freq);
       if (inFlightRef.current === freq) return null;
       inFlightRef.current = freq;
+      const desc = describeFreq(freq);
       setStatus({ phase: 'extending', freq, channelName: args.channelName });
       try {
         const reply = await extendChat.send(
-          userPromptForExtend({ freq, channelName: args.channelName, priorSubtitle: args.priorSubtitle, nudge: args.nudge }),
+          userPromptForExtend({ freq, channelName: args.channelName, priorSubtitle: args.priorSubtitle, desc, nudge: args.nudge }),
         );
         if (inFlightRef.current !== freq) return null;
         const parsed = parseExtendJSON(reply);
@@ -99,7 +102,7 @@ export function useChannel() {
         const { subtitle, imagePrompt } = parsed;
         const imageUrl = await genImageWithRetry(
           genImg,
-          { prompt: buildImagePrompt(imagePrompt) },
+          { prompt: buildImagePrompt(imagePrompt, desc) },
           (info) => {
             if (inFlightRef.current !== freq) return;
             if (info.retrying) {

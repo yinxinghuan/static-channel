@@ -47,6 +47,12 @@ const STR: Record<Locale, Record<string, string>> = {
     'segments.count_one': '1 segment',
     'segments.latest_by': 'latest · {who}',
     'broadcast.no_signal_yet': 'first to tune in here',
+    'listen.label': "I'M LISTENING",
+    'listen.on': 'LISTENING',
+    'tuneback.label': 'someone tuned into your {f} →',
+    'notify.keep': '{sender_name} kept your channel on {f} MHz.',
+    'notify.continue': '{sender_name} stayed on the air on your {f} MHz.',
+    'notify.listen': '{sender_name} is listening to your {f} MHz broadcast.',
   },
   zh: {
     'hint.drag': '左右拖动屏幕调台',
@@ -94,6 +100,12 @@ const STR: Record<Locale, Record<string, string>> = {
     'segments.count_one': '1 段',
     'segments.latest_by': '最新 · {who}',
     'broadcast.no_signal_yet': '这条线还没人调到过',
+    'listen.label': '我在听',
+    'listen.on': '在听',
+    'tuneback.label': '有人调进了你的 {f} →',
+    'notify.keep': '{sender_name} 留下了你的 {f} MHz 频道。',
+    'notify.continue': '{sender_name} 接着播了你的 {f} MHz。',
+    'notify.listen': '{sender_name} 正在听你的 {f} MHz。',
   },
 };
 

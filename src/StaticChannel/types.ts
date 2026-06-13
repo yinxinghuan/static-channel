@@ -47,10 +47,19 @@ export type Bookmark = {
   lastSeenTs: number;
 };
 
+// A lightweight "I'm listening" reaction the user left on someone's segment.
+// (freq, segTs) identifies the target segment across the band.
+export type Reaction = {
+  freq: number;
+  segTs: number;         // ts of the segment being reacted to
+  ts: number;            // when the reaction was left
+};
+
 // New persisted shape per user.
 export type SavePayload = {
   segments?: Segment[];
   bookmarks?: Bookmark[];
+  reactions?: Reaction[];
 };
 
 // Old persisted shape — read-only migration only.
@@ -62,11 +71,13 @@ export type LegacySavePayload = {
 // each treated as the user's authored anchor at that freq.
 export function migrateSave(raw: unknown): SavePayload {
   const r = (raw ?? {}) as SavePayload & LegacySavePayload;
+  const reactions: Reaction[] = Array.isArray(r.reactions) ? r.reactions.filter(isValidReaction) : [];
   const segs: Segment[] = Array.isArray(r.segments) ? r.segments.filter(isValidSegment) : [];
   if (segs.length > 0) {
     return {
       segments: segs,
       bookmarks: Array.isArray(r.bookmarks) ? r.bookmarks.filter(isValidBookmark) : [],
+      reactions,
     };
   }
   const legacy: Segment[] = Array.isArray(r.channels)
@@ -83,6 +94,7 @@ export function migrateSave(raw: unknown): SavePayload {
   return {
     segments: legacy,
     bookmarks: legacy.map(s => ({ freq: s.freq, lastSeenTs: s.ts })),
+    reactions,
   };
 }
 
@@ -102,6 +114,17 @@ function isValidBookmark(b: unknown): b is Bookmark {
   if (!b || typeof b !== 'object') return false;
   const x = b as Bookmark;
   return typeof x.freq === 'number' && typeof x.lastSeenTs === 'number';
+}
+
+function isValidReaction(r: unknown): r is Reaction {
+  if (!r || typeof r !== 'object') return false;
+  const x = r as Reaction;
+  return typeof x.freq === 'number' && typeof x.segTs === 'number' && typeof x.ts === 'number';
+}
+
+// Identity key for a segment / reaction target: "97.3:1700000000000".
+export function segKey(freq: number, segTs: number): string {
+  return `${snapFreq(freq).toFixed(1)}:${segTs}`;
 }
 
 export const FREQ_MIN = 88.0;

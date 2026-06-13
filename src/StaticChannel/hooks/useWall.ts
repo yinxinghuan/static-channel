@@ -16,10 +16,15 @@ import { getGameUuid } from '@shared/runtime';
 import type {
   Bookmark,
   Broadcast,
+  Reaction,
   Segment,
   SegmentWithAuthor,
 } from '../types';
-import { freqKey, migrateSave, sameFreq } from '../types';
+import { freqKey, migrateSave, sameFreq, segKey } from '../types';
+
+// Per-segment "I'm listening" tally: how many distinct users reacted, and
+// whether the current user is one of them.
+export type ReactionTally = { count: number; mine: boolean };
 
 interface RawRow {
   user_id: string;
@@ -30,14 +35,17 @@ interface RawRow {
   resource_data: string;
 }
 
-export function useWall(mySegments: Segment[]) {
+export function useWall(mySegments: Segment[], myReactions: Reaction[]) {
   const [broadcasts, setBroadcasts] = useState<Broadcast[]>([]);
   const [recent, setRecent] = useState<SegmentWithAuthor[]>([]);
+  const [reactionTally, setReactionTally] = useState<Map<string, ReactionTally>>(new Map());
   const [loaded, setLoaded] = useState(false);
 
   const refresh = useCallback(async () => {
     const sessionId = getGameUuid();
     if (!isInAigram || !sessionId) {
+      // Offline / preview — still surface our own reactions locally.
+      setReactionTally(tallyReactions([], myReactions));
       setLoaded(true);
       return;
     }
@@ -48,11 +56,12 @@ export function useWall(mySegments: Segment[]) {
       );
       const rows: RawRow[] = Array.isArray(res?.data) ? res.data : [];
       const all: SegmentWithAuthor[] = [];
+      const otherReactions: Reaction[] = [];
       for (const r of rows) {
         if (!r.resource_data) continue;
         const isSelf = r.user_id === telegramId;
-        // Skip self — we render self-authored segments from local `mySegments`
-        // to avoid round-trip lag right after publishing.
+        // Skip self segments — we render self-authored segments from local
+        // `mySegments` to avoid round-trip lag right after publishing.
         if (isSelf) continue;
         let payload;
         try {
@@ -70,6 +79,7 @@ export function useWall(mySegments: Segment[]) {
             authorAvatarUrl: r.head_url || r.user_avatar_url || undefined,
           });
         }
+        for (const rx of payload.reactions ?? []) otherReactions.push(rx);
       }
       // Splice in our own authored segments so they appear instantly.
       for (const s of mySegments) {
@@ -83,19 +93,37 @@ export function useWall(mySegments: Segment[]) {
       const grouped = groupByFreq(all);
       setBroadcasts(grouped);
       setRecent(buildRecent(all));
+      setReactionTally(tallyReactions(otherReactions, myReactions));
     } catch (_) {
       // network / bridge — keep stale data
     } finally {
       setLoaded(true);
     }
-  // mySegments is intentionally captured by reference each refresh; deps left
-  // empty so callers can call refresh() at any moment without re-creating it.
+  // mySegments / myReactions are intentionally captured by reference each
+  // refresh; deps include them so callers get a fresh closure when they change.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mySegments]);
+  }, [mySegments, myReactions]);
 
   useEffect(() => { refresh(); }, [refresh]);
 
-  return { broadcasts, recent, loaded, refresh };
+  return { broadcasts, recent, reactionTally, loaded, refresh };
+}
+
+function tallyReactions(others: Reaction[], mine: Reaction[]): Map<string, ReactionTally> {
+  const map = new Map<string, ReactionTally>();
+  for (const r of others) {
+    const k = segKey(r.freq, r.segTs);
+    const cur = map.get(k);
+    if (cur) cur.count += 1;
+    else map.set(k, { count: 1, mine: false });
+  }
+  for (const r of mine) {
+    const k = segKey(r.freq, r.segTs);
+    const cur = map.get(k);
+    if (cur) { cur.count += 1; cur.mine = true; }
+    else map.set(k, { count: 1, mine: true });
+  }
+  return map;
 }
 
 function groupByFreq(all: SegmentWithAuthor[]): Broadcast[] {

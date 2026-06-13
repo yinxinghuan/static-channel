@@ -33,6 +33,17 @@
       inset 0 0 30px rgba(0,0,0,0.85),
       inset 0 0 1px rgba(160,200,255,0.25),
       0 0 0 2px #0a0807;
+
+    &.is-flicker {
+      animation: sc-screen-flicker 0.13s steps(2) infinite;
+    }
+  }
+
+  &__filters {
+    position: absolute;
+    width: 0;
+    height: 0;
+    pointer-events: none;
   }
 
   &__pic {
@@ -43,6 +54,94 @@
     object-fit: cover;
     filter: saturate(0.85) contrast(1.05) brightness(0.95);
     transition: opacity 380ms ease;
+
+    // RGB misconvergence — two channel-isolated copies pushed apart so red and
+    // cyan fringes bleed off the edges of the real picture.
+    &--ghost {
+      transition: none;
+      mix-blend-mode: screen;
+      pointer-events: none;
+    }
+    &--red {
+      filter: url(#sc-keep-red);
+      transform: translateX(calc(var(--sc-dx, 0px) * -1));
+    }
+    &--cyan {
+      filter: url(#sc-keep-cyan);
+      transform: translateX(var(--sc-dx, 0px));
+    }
+  }
+
+  // VHS tracking band — a torn, noisy stripe that crawls up the screen.
+  &__tracking {
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 13%;
+    z-index: 3;
+    pointer-events: none;
+    opacity: var(--sc-track-op, 0);
+    mix-blend-mode: screen;
+    background:
+      repeating-linear-gradient(
+        0deg,
+        rgba(255,255,255,0.55) 0px,
+        rgba(255,255,255,0.55) 1px,
+        rgba(0,0,0,0.0) 1px,
+        rgba(0,0,0,0.0) 2px,
+        rgba(180,180,180,0.5) 2px,
+        rgba(180,180,180,0.5) 3px
+      );
+    filter: blur(0.5px);
+    transform: skewX(-7deg);
+    animation: sc-track-crawl var(--sc-track-dur, 6s) linear infinite;
+    box-shadow: 0 -1px 6px rgba(255,255,255,0.35);
+  }
+
+  // Head-switching noise — the torn static strip pinned at the very bottom of
+  // every analog tape playback.
+  &__headswitch {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 4.5%;
+    z-index: 3;
+    pointer-events: none;
+    opacity: var(--sc-head-op, 0);
+    mix-blend-mode: screen;
+    background:
+      repeating-linear-gradient(
+        90deg,
+        rgba(255,255,255,0.6) 0px,
+        rgba(255,255,255,0.6) 2px,
+        rgba(40,40,40,0.5) 2px,
+        rgba(40,40,40,0.5) 5px,
+        rgba(200,200,200,0.55) 5px,
+        rgba(200,200,200,0.55) 7px
+      );
+    animation: sc-headswitch-jitter 0.18s steps(2) infinite;
+  }
+
+  // Vertical-hold instability — a dark blanking bar sweeps down the picture,
+  // like the image is about to roll.
+  &__rollbar {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: -22%;
+    height: 18%;
+    z-index: 3;
+    pointer-events: none;
+    background: linear-gradient(
+      180deg,
+      rgba(0,0,0,0) 0%,
+      rgba(0,0,0,0.55) 35%,
+      rgba(0,0,0,0.7) 55%,
+      rgba(255,255,255,0.18) 92%,
+      rgba(255,255,255,0.0) 100%
+    );
+    animation: sc-rollbar-sweep var(--sc-roll-dur, 7s) linear infinite;
   }
 
   &__snow {
@@ -280,4 +379,26 @@
 @keyframes sc-hint-pulse {
   0%,100% { opacity: 0.45; transform: translate(-50%, -50%) scale(1); }
   50%     { opacity: 1.0;  transform: translate(-50%, -50%) scale(1.04); }
+}
+
+@keyframes sc-track-crawl {
+  0%   { top: 108%; }
+  100% { top: -16%; }
+}
+
+@keyframes sc-headswitch-jitter {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(-2px); }
+}
+
+@keyframes sc-rollbar-sweep {
+  0%   { top: -22%; }
+  88%  { top: 104%; }
+  100% { top: 104%; }   // brief pause at the bottom before the next roll
+}
+
+@keyframes sc-screen-flicker {
+  0%   { filter: brightness(1);    }
+  50%  { filter: brightness(0.86); }
+  100% { filter: brightness(1.04); }
 }

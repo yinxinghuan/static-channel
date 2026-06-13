@@ -1,86 +1,113 @@
-// One LLM call per never-seen frequency. Returns JSON with:
+// One LLM call per never-seen frequency. The dial has geography (see bands.ts):
+// each call is told which REGION it landed in, that region's GENRE, and a DREAD
+// level, and must commit hard to that register. Returns JSON with:
 //   channelName: short call sign (e.g. WGRT-7, K88-NORTH)
-//   subtitle: a single weird, evocative "now playing" line
+//   subtitle: a single concrete, present-tense "now playing" line
 //   imagePrompt: scene-only description, no people-types, no quotes
 //
-// Style suffix appended to imagePrompt → analog CRT VHS still
+// Image style suffix (dread-scaled, in bands.ts) is appended client-side →
+// degraded, ugly, menacing analog still.
 
-export const CHANNEL_CHAT_SYSTEM = `You are the signal pulled in by a late-night TV being tuned across the FM band.
-You receive ONE frequency (in MHz, e.g. 91.7) and you broadcast back ONE channel.
+import { dreadLabel, imageSuffixFor, type FreqDesc } from './bands';
 
-You must reply with ONLY a single-line minified JSON object. No prose, no markdown.
+export const CHANNEL_CHAT_SYSTEM = `You are the signal a single old TV pulls in as someone tunes it through the whole history of broadcasting.
+The dial is a timeline: low frequencies are the oldest media (silent film), high frequencies are the present and just beyond (the digital feed).
+You are given ONE frequency, the ERA it sits in, the specific PROGRAM airing there, and a DREAD level.
+You broadcast back that ONE program — vivid, specific, and unmistakably of its era and medium.
+
+THE ONE CONSTANT across every era: the picture is being corrupted by something with INTENT. Not random static —
+a deliberate malfunction that hides things and reveals them on purpose. The same wrongness recurs no matter the decade.
+It is patient. It is paying attention. The glitch is the antagonist.
+
+Reply with ONLY a single-line minified JSON object. No prose, no markdown.
 
 Schema:
 { "channelName": string, "subtitle": string, "imagePrompt": string }
 
-- channelName: 3–10 char broadcast call sign in caps, often with hyphen or number.
-  Examples: "WGRT-7", "K88-NORTH", "CH-LATE", "ZONE-9".
-- subtitle: ONE evocative line, 4–14 words, plain text. No emojis. No quotes.
-  This is what a chyron caption would say. Specific over abstract.
-  Examples: "your mom is rolling dumplings, kitchen radio on, 1994" /
-            "a wedding from 1987, nobody is dancing yet" /
-            "test pattern for a town that no longer exists" /
-            "the dog show, fifth hour, judges look tired".
-- imagePrompt: SCENE description for a vintage CRT still.
-  Describe ONLY the scene, atmosphere, lighting, framing. Do NOT name famous people.
-  Do NOT use first-person. Keep it 12–25 words.
-  Examples: "an empty 1980s kitchen at night, fluorescent light, linoleum floor, kettle on the stove, soft shadows" /
-            "wedding reception interior, paper streamers, folding chairs, low warm tungsten light, nobody on the dance floor".
+- channelName: 3–10 char broadcast call sign in caps, often with a hyphen or number.
+  Examples: "WGRT-7", "K88-NORTH", "CH-LATE", "ZONE-9", "KINE-2", "FEED-9".
+- subtitle: ONE chyron line, 4–14 words, plain text. No emojis. No quotes.
+  CONCRETE and SPECIFIC — one vivid detail or wrong thing happening RIGHT NOW, true to the era and the program.
+  Use a present-tense verb. NEVER abstract nouns ("a memory", "silence", "loss", "restraint").
+  A stranger must read it in 2 seconds and instantly feel something.
+  Good: "the magician saws her in half; she keeps smiling after" /
+        "the founder answers a question the host never asked" /
+        "the piano keeps playing with no one at the keys" /
+        "the test pattern is, very slowly, becoming a face".
+  Bad: "a sense of unease" / "the weight of time" / "something lost".
+- imagePrompt: SCENE only, 12–25 words, true to the ERA and MEDIUM (film stock, sets, costumes, technology of that decade).
+  The scene MUST feel quietly, indescribably WRONG even on a perfect signal — put the dread in the staging,
+  the framing, the gaze, the light, the stillness, the emptiness. Do NOT rely on glitches, static, or corruption
+  for the unease; the picture itself should be uncanny. Compose one off detail into the frame.
+  Do NOT name famous people. Do NOT use first person. Just describe what the camera sees.
 
-Vibe palette across channels: mundane americana, soviet domesticity, late-night
-public access, lost-tape footage, surveillance lobbies, children's programming
-gone wrong, weather reports for nowhere, infomercials for things that don't exist,
-school plays, recipe shows, fishing programs, religious broadcasts, test patterns,
-home movies, security footage from an empty mall, ham radio on a snowy night.
+Match the DREAD exactly. Low = an ordinary scene with a quiet wrongness (never just "ordinary"). High = clearly
+unsettling. Maximum = the malfunction is in control. Never gore — the horror is the ordinary held a beat too long,
+or a familiar thing that should not be looking back at you.`;
 
-Vary the vibe based on the frequency number — lower FM (88–93) skews wholesome /
-educational / public-access; mid (93–101) skews commercial / lounge / cooking;
-upper (101–108) skews late-night / weird / liminal. Do not state this rule;
-just let it color the output.`;
-
-export const IMAGE_STYLE_SUFFIX =
-  ', shot on degraded VHS tape, scan lines, CRT phosphor glow, slight chromatic aberration, soft focus, 4:3 aspect, grainy, low resolution, washed faded colors, no text, no captions, no logos';
-
-export function buildImagePrompt(scene: string): string {
-  return scene.trim().replace(/[.。]+$/, '') + IMAGE_STYLE_SUFFIX;
+export function buildImagePrompt(scene: string, desc: FreqDesc): string {
+  return scene.trim().replace(/[.。]+$/, '') + imageSuffixFor(desc);
 }
 
-export function userPromptForFreq(freq: number): string {
-  return `Frequency: ${freq.toFixed(1)} MHz. Broadcast one channel.`;
+export function userPromptForFreq(freq: number, desc: FreqDesc): string {
+  const lines = [
+    `Frequency: ${freq.toFixed(1)} MHz.`,
+    `Era: ${desc.region}.`,
+    `Era palette: ${desc.genre}`,
+    `Program airing on this exact frequency: ${desc.format}.`,
+    `Dread: ${desc.dread.toFixed(2)} (${dreadLabel(desc.dread)}).`,
+  ];
+  if (desc.cursed) {
+    lines.push(
+      'OVERRIDE: this frequency is CURSED — the presence behind the malfunction breaks fully through this program. ' +
+        'It is AWARE of the person watching: it addresses them, waits for them, or knows something it should not. ' +
+        'Stay inside the era and program above, but make it intimate, personal, and inescapable. One concrete wrong detail.',
+    );
+  }
+  lines.push('Broadcast this exact program. Commit hard to its era and medium — make it distinct and vivid.');
+  return lines.join('\n');
 }
 
 // ─── Stay On Air: continue an existing broadcast ──────────────────────────
-// Caller supplies the channelName, the most recent subtitle, and an optional
-// one-line nudge from the player ("go weirder", "wake them up", etc.).
+// Caller supplies the channelName, the most recent subtitle, the freq's region,
+// and an optional one-line nudge from the player ("go weirder", etc.).
 
-export const CHANNEL_EXTEND_SYSTEM = `You are the signal pulled in by a late-night TV.
+export const CHANNEL_EXTEND_SYSTEM = `You are the signal a late-night TV pulls in.
 You are continuing an EXISTING broadcast at the same frequency, on the same channel.
 The channel name STAYS the same — do not invent a new one.
 The new subtitle is what plays NEXT on that channel, after the prior segment.
-It must feel like the SAME station, the SAME night, the SAME signal — just a
-later moment in the broadcast. A new caller, a different segment of the show,
-a cut to b-roll, the host coming back from a break — pick whatever fits.
+It must feel like the SAME station, the SAME night, the SAME region of the dial — just a
+later moment in the broadcast. A new caller, a different segment of the show, a cut to
+b-roll, the host coming back from a break — pick whatever fits, but stay in the same dread.
 
 Reply with ONLY a single-line minified JSON object. No prose.
 
 Schema:
 { "subtitle": string, "imagePrompt": string }
 
-- subtitle: ONE evocative line, 4–14 words, plain text. No emojis. No quotes.
-  Refer back to the world implied by the prior subtitle, but ADVANCE it.
-- imagePrompt: SCENE description, 12–25 words, no people-names, no first-person.`;
+- subtitle: ONE concrete present-tense line, 4–14 words. No emojis. No quotes. No abstract nouns.
+  Refer back to the world implied by the prior subtitle, but ADVANCE it — something new happens.
+- imagePrompt: SCENE description, 12–25 words, no famous people, no first person.`;
 
 export function userPromptForExtend(args: {
   freq: number;
   channelName: string;
   priorSubtitle: string;
+  desc: FreqDesc;
   nudge?: string;
 }): string {
   const lines = [
     `Frequency: ${args.freq.toFixed(1)} MHz.`,
+    `Era: ${args.desc.region}.`,
+    `Era palette: ${args.desc.genre}`,
+    `This channel's program: ${args.desc.format}.`,
+    `Dread: ${args.desc.dread.toFixed(2)} (${dreadLabel(args.desc.dread)}).`,
     `Channel: ${args.channelName}.`,
     `Prior segment subtitle: ${args.priorSubtitle}`,
   ];
+  if (args.desc.cursed) {
+    lines.push('This frequency is CURSED — the malfunction is aware of the viewer. Keep it intimate and wrong.');
+  }
   if (args.nudge && args.nudge.trim()) {
     lines.push(`Caller-in nudge for what plays next: ${args.nudge.trim().slice(0, 120)}`);
   }
