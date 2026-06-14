@@ -132,7 +132,19 @@ export default function StaticChannel() {
 
   const onFirstTouch = useCallback(() => setHintVisible(false), []);
 
-  const tuner = useTuner(pickInitialFreq(), { onSettle, onFirstTouch });
+  // A short tap (no drag) on the TV advances to the next segment of the current
+  // channel — the row of dots at the bottom is too small to be the only target.
+  // Read segment state through a ref so this callback stays stable for useTuner.
+  const segNavRef = useRef({ count: 0, idx: 0 });
+  const onScreenTap = useCallback(() => {
+    const { count, idx } = segNavRef.current;
+    if (count < 2) return;
+    const next = (idx + 1) % count;
+    setActiveSegmentIdx(next);
+    wasOnLatestRef.current = (next === count - 1);
+  }, []);
+
+  const tuner = useTuner(pickInitialFreq(), { onSettle, onFirstTouch, onScreenTap });
 
   useEffect(() => { installGlobalTapFeedback(); }, []);
 
@@ -152,6 +164,7 @@ export default function StaticChannel() {
   const prevFreqRef = useRef(snapped);
   const prevCountRef = useRef(0);
   const segmentCount = activeBroadcast?.segmentCount ?? 0;
+  segNavRef.current = { count: segmentCount, idx: activeSegmentIdx };
 
   useEffect(() => {
     if (prevFreqRef.current !== snapped) {

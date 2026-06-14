@@ -289,6 +289,27 @@
     white-space: nowrap;
   }
 
+  // "TAP → NEXT" — affordance hint that the entire TV screen is tappable to
+  // advance segments. Lives just under the position pill, pulses gently.
+  &__segtap {
+    position: absolute;
+    top: 32px;
+    right: 10px;
+    z-index: 8;
+    padding: 2px 7px;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.42);
+    border: 1px solid rgba(255, 220, 160, 0.22);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 9.5px;
+    color: rgba(255, 217, 160, 0.85);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    pointer-events: none;
+    text-shadow: 0 1px 0 rgba(0,0,0,0.6);
+    animation: sc-segtap-pulse 1.7s ease-in-out infinite;
+  }
+
   // Bottom dot rail — each dot is tappable, jumps the TV to that segment.
   &__segrail {
     position: absolute;
@@ -308,7 +329,7 @@
   &__segdot {
     appearance: none;
     border: 0;
-    padding: 4px;             // tap target padding around 6px visible dot
+    padding: 6px;             // tap target padding around 9px visible dot
     background: transparent;
     cursor: pointer;
     -webkit-tap-highlight-color: transparent;
@@ -318,15 +339,15 @@
     &::before {
       content: '';
       display: block;
-      width: 6px;
-      height: 6px;
+      width: 9px;
+      height: 9px;
       border-radius: 50%;
-      background: rgba(255, 220, 160, 0.35);
+      background: rgba(255, 220, 160, 0.42);
       transition: background 120ms ease, transform 120ms ease, box-shadow 120ms ease;
     }
     &.is-on::before {
       background: #ff8a3a;
-      box-shadow: 0 0 6px rgba(255, 138, 58, 0.8);
+      box-shadow: 0 0 8px rgba(255, 138, 58, 0.85);
       transform: scale(1.25);
     }
     &:active::before {
@@ -404,6 +425,11 @@
     color: rgba(255,210,140,0.75);
     letter-spacing: 0.06em;
   }
+}
+
+@keyframes sc-segtap-pulse {
+  0%,100% { opacity: 0.55; }
+  50%     { opacity: 1; }
 }
 
 @keyframes sc-hint-pulse {

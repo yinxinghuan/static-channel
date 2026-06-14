@@ -21,7 +21,11 @@ export type TunerState = {
 export type TunerCallbacks = {
   onSettle?: (freq: number) => void;     // fires once after release + momentum done
   onFirstTouch?: () => void;             // fires on the first pointerdown ever
+  onScreenTap?: () => void;              // short tap on the TV screen (not the dial)
 };
+
+const TAP_PX = 8;          // any total finger travel under this is a tap, not a drag
+const TAP_MS = 350;        // ...if released within this window
 
 export function useTuner(initial: number, cb: TunerCallbacks): {
   state: TunerState;
@@ -47,11 +51,14 @@ export function useTuner(initial: number, cb: TunerCallbacks): {
   const dragRef = useRef<{
     pointerId: number;
     startX: number;
+    startY: number;
+    startT: number;
     startFreq: number;
     lastX: number;
     lastT: number;
     velocity: number;                // MHz/ms
     pxPerMHz: number;                // sensitivity of the drag source (TV vs Dial)
+    source: 'tv' | 'dial';           // TV taps advance segments; dial taps don't
   } | null>(null);
 
   const settleRafRef = useRef<number | null>(null);
@@ -104,7 +111,7 @@ export function useTuner(initial: number, cb: TunerCallbacks): {
     settleRafRef.current = requestAnimationFrame(tick);
   }, [setFreq, stopSettle]);
 
-  const beginDrag = useCallback((e: React.PointerEvent, pxPerMHz: number) => {
+  const beginDrag = useCallback((e: React.PointerEvent, pxPerMHz: number, source: 'tv' | 'dial') => {
     if (e.button === 2) return;
     if (!firstTouchedRef.current) {
       firstTouchedRef.current = true;
@@ -115,21 +122,25 @@ export function useTuner(initial: number, cb: TunerCallbacks): {
     }
     stopSettle();
     (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+    const now = performance.now();
     dragRef.current = {
       pointerId: e.pointerId,
       startX: e.clientX,
+      startY: e.clientY,
+      startT: now,
       startFreq: stateRef.current.freq,
       lastX: e.clientX,
-      lastT: performance.now(),
+      lastT: now,
       velocity: 0,
       pxPerMHz,
+      source,
     };
     setHiss(0.3);
     setState(s => ({ ...s, isDragging: true, isSettling: false }));
   }, [stopSettle]);
 
-  const onPointerDown     = useCallback((e: React.PointerEvent) => beginDrag(e, PIXELS_PER_MHZ_TV),   [beginDrag]);
-  const onPointerDownDial = useCallback((e: React.PointerEvent) => beginDrag(e, PIXELS_PER_MHZ_DIAL), [beginDrag]);
+  const onPointerDown     = useCallback((e: React.PointerEvent) => beginDrag(e, PIXELS_PER_MHZ_TV,   'tv'),   [beginDrag]);
+  const onPointerDownDial = useCallback((e: React.PointerEvent) => beginDrag(e, PIXELS_PER_MHZ_DIAL, 'dial'), [beginDrag]);
 
   useEffect(() => {
     const onMove = (e: PointerEvent) => {
@@ -153,7 +164,23 @@ export function useTuner(initial: number, cb: TunerCallbacks): {
       const d = dragRef.current;
       if (!d || e.pointerId !== d.pointerId) return;
       dragRef.current = null;
-      // If virtually no movement, treat as a tap: still snap, fire onSettle.
+      // True tap (short, near-zero travel). TV taps go to onScreenTap and DO NOT
+      // change the frequency; dial taps fall through to the snap+settle path.
+      const totalDist = Math.hypot(e.clientX - d.startX, e.clientY - d.startY);
+      const elapsed = performance.now() - d.startT;
+      if (totalDist < TAP_PX && elapsed < TAP_MS) {
+        setHiss(0);
+        if (d.source === 'tv' && cbRef.current.onScreenTap) {
+          setState(s => ({ ...s, isDragging: false, isSettling: false }));
+          cbRef.current.onScreenTap();
+          return;
+        }
+        const finalFreq = snapFreq(stateRef.current.freq);
+        setFreq(finalFreq, false, false);
+        cbRef.current.onSettle?.(finalFreq);
+        return;
+      }
+      // Tiny residual velocity after a slow drag — settle in place.
       if (Math.abs(d.velocity) < 0.0008) {
         const finalFreq = snapFreq(stateRef.current.freq);
         setFreq(finalFreq, false, false);

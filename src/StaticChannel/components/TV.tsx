@@ -230,6 +230,12 @@ export default function TV({
           )}
 
           {showSegUI && segNav && (
+            <div className="sc-tv__segtap" aria-hidden="true">
+              {t('seg.tap_next')}
+            </div>
+          )}
+
+          {showSegUI && segNav && (
             <div
               className="sc-tv__segrail"
               onPointerDown={(e) => e.stopPropagation()}
